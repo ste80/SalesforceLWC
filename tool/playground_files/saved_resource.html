@@ -1,0 +1,5524 @@
+<!DOCTYPE html>
+<!-- saved from url=(0051)https://d3nm9grey5nsoo.cloudfront.net/projects/edit -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+            
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+            <title>Simple app</title>
+            <meta name="description" content="Simple LWC application.">
+            <link rel="stylesheet" as="style" href="./salesforce-lightning-design-system.min(1).css">
+        <style type="text/css" data-token="lightning-primitive-icon_primitive-icon">/*
+"Temporary" fix for Edge SVG quirk. We can remove this when it is fixed either
+at the SLDS level or at the browser level.
+ https://git.soma.salesforce.com/aura/lightning-global/issues/1349
+*/
+@supports (-ms-ime-align:auto) {
+    svg[lightning-primitive-icon_primitive-icon] {
+        pointer-events: none;
+    }
+}
+</style><style type="text/css" data-token="lightning-combobox_combobox">[lightning-combobox_combobox-host] {
+    display: block;
+}
+</style><style type="text/css" data-token="c-app_app">h1[c-app_app] {
+    color: rgb(0, 112, 210);
+}
+p[c-app_app] {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+    color: rgb(62, 62, 60);
+}
+</style></head>
+        <body>
+            <script src="./engine.js"></script>
+            
+            <script>
+            (function (Engine) {
+'use strict';
+
+const proto = {
+  add(className) {
+    if (typeof className === 'string') {
+      this[className] = true;
+    } else {
+      Object.assign(this, className);
+    }
+
+    return this;
+  },
+
+  invert() {
+    Object.keys(this).forEach(key => {
+      this[key] = !this[key];
+    });
+    return this;
+  },
+
+  toString() {
+    return Object.keys(this).filter(key => this[key]).join(' ');
+  }
+
+};
+function classSet(config) {
+  if (typeof config === 'string') {
+    const key = config;
+    config = {};
+    config[key] = true;
+  }
+
+  return Object.assign(Object.create(proto), config);
+}
+
+function assert(condition, message) {
+  {
+    if (!condition) {
+      throw new Error(message);
+    }
+  }
+}
+
+/**
+An emitter implementation based on the Node.js EventEmitter API:
+https://nodejs.org/dist/latest-v6.x/docs/api/events.html#events_class_eventemitter
+**/
+class EventEmitter {
+  constructor() {
+    this.registry = {};
+  }
+  /**
+  Registers a listener on the emitter
+  @method EventEmitter#on
+  @param {String} name - The name of the event
+  @param {Function} listener - The callback function
+  @return {EventEmitter} - Returns a reference to the `EventEmitter` so that calls can be chained
+  **/
+
+
+  on(name, listener) {
+    this.registry[name] = this.registry[name] || [];
+    this.registry[name].push(listener);
+    return this;
+  }
+  /**
+  Registers a listener on the emitter that only executes once
+  @method EventEmitter#once
+  @param {String} name - The name of the event
+  @param {Function} listener - The callback function
+  @return {EventEmitter} - Returns a reference to the `EventEmitter` so that calls can be chained
+  **/
+
+
+  once(name, listener) {
+    const doOnce = function () {
+      listener.apply(null, arguments);
+      this.removeListener(name, doOnce);
+    }.bind(this);
+
+    this.on(name, doOnce);
+    return this;
+  }
+  /**
+  Synchronously calls each listener registered with the specified event
+  @method EventEmitter#emit
+  @param {String} name - The name of the event
+  @return {Boolean} - Returns `true` if the event had listeners, `false` otherwise
+  **/
+
+
+  emit(name, ...args) {
+    const listeners = this.registry[name];
+    let count = 0;
+
+    if (listeners) {
+      listeners.forEach(listener => {
+        count += 1;
+        listener.apply(null, args);
+      });
+    }
+
+    return count > 0;
+  }
+  /**
+  Removes the specified `listener` from the listener array for the event named `name`
+  @method EventEmitter#removeListener
+  @param {String} name - The name of the event
+  @param {Function} listener - The callback function
+  @return {EventEmitter} - Returns a reference to the `EventEmitter` so that calls can be chained
+  **/
+
+
+  removeListener(name, listener) {
+    const listeners = this.registry[name];
+
+    if (listeners) {
+      for (let i = 0, len = listeners.length; i < len; i += 1) {
+        if (listeners[i] === listener) {
+          listeners.splice(i, 1);
+          return this;
+        }
+      }
+    }
+
+    return this;
+  }
+
+}
+
+/**
+ * Utility function to generate an unique guid.
+ * used on state objects to provide a performance aid when iterating
+ * through the items and marking them for render
+ * @returns {String} an unique string ID
+ */
+function guid() {
+  function s4() {
+    return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+  }
+
+  return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
+}
+
+function classListMutation(classList, config) {
+  Object.keys(config).forEach(key => {
+    if (typeof key === 'string' && key.length) {
+      if (config[key]) {
+        classList.add(key);
+      } else {
+        classList.remove(key);
+      }
+    }
+  });
+}
+
+/**
+A string normalization utility for attributes.
+@param {String} value - The value to normalize.
+@param {Object} config - The optional configuration object.
+@param {String} [config.fallbackValue] - The optional fallback value to use if the given value is not provided or invalid. Defaults to an empty string.
+@param {Array} [config.validValues] - An optional array of valid values. Assumes all input is valid if not provided.
+@return {String} - The normalized value.
+**/
+function normalizeString(value, config = {}) {
+  const {
+    fallbackValue = '',
+    validValues
+  } = config;
+  let normalized = typeof value === 'string' && value.trim() || '';
+  normalized = normalized.toLowerCase();
+
+  if (validValues && validValues.indexOf(normalized) === -1) {
+    normalized = fallbackValue;
+  }
+
+  return normalized;
+}
+/**
+A boolean normalization utility for attributes.
+@param {Any} value - The value to normalize.
+@return {Boolean} - The normalized value.
+**/
+
+function normalizeBoolean(value) {
+  return typeof value === 'string' || !!value;
+}
+function normalizeArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  return [];
+}
+/**
+A aria attribute normalization utility.
+@param {Any} value - A single aria value or an array of aria values
+@return {String} - A space separated list of aria values
+**/
+
+function normalizeAriaAttribute(value) {
+  let arias = Array.isArray(value) ? value : [value];
+  arias = arias.map(ariaValue => {
+    if (typeof ariaValue === 'string') {
+      return ariaValue.replace(/\s+/g, ' ').trim();
+    }
+
+    return '';
+  }).filter(ariaValue => !!ariaValue);
+  return arias.length > 0 ? arias.join(' ') : undefined;
+}
+
+const keyCodes = {
+  tab: 9,
+  backspace: 8,
+  enter: 13,
+  escape: 27,
+  space: 32,
+  pageup: 33,
+  pagedown: 34,
+  end: 35,
+  home: 36,
+  left: 37,
+  up: 38,
+  right: 39,
+  down: 40,
+  delete: 46,
+  shift: 16
+};
+const buffer = {};
+/**
+ * Runs an action and passes the string of buffered keys typed within a short time period.
+ * Use for type-ahead like functionality in menus, lists, comboboxes, and similar components.
+ *
+ * @param {CustomEvent} event A keyboard event
+ * @param {Function} action function to run, it's passed the buffered text
+ */
+
+function runActionOnBufferedTypedCharacters(event, action) {
+  // If we were going to clear what keys were typed, don't yet.
+  if (buffer._clearBufferId) {
+    clearTimeout(buffer._clearBufferId);
+  } // Store the letter.
+
+
+  const letter = String.fromCharCode(event.keyCode);
+  buffer._keyBuffer = buffer._keyBuffer || [];
+
+  buffer._keyBuffer.push(letter);
+
+  const matchText = buffer._keyBuffer.join('').toLowerCase();
+
+  action(matchText); // eslint-disable-next-line lwc/no-set-timeout
+
+  buffer._clearBufferId = setTimeout(() => {
+    buffer._keyBuffer = [];
+  }, 700);
+}
+
+// Closure to hold the APIs if and when available
+let PROVIDED_IMPL = {getPathPrefix:()=>{return'/slds/2.7.4'},getFormFactor:()=>void 0,getToken:()=>void 0,getLocale:()=>void 0,getLocalizationService:()=>void 0,sanitizeDOM:()=>void 0};
+function getPathPrefix() {
+  return PROVIDED_IMPL && PROVIDED_IMPL.getPathPrefix() || '';
+}
+function getToken(name) {
+  return PROVIDED_IMPL && PROVIDED_IMPL.getToken(name);
+}
+
+// Taken from https://github.com/jonathantneal/svg4everybody/pull/139
+// Remove this iframe-in-edge check once the following is resolved https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/8323875/
+const isEdgeUA = /\bEdge\/.(\d+)\b/.test(navigator.userAgent);
+const inIframe = window.top !== window.self;
+const isIframeInEdge = isEdgeUA && inIframe;
+
+// Taken from https://git.soma.salesforce.com/aura/lightning-global/blob/999dc35f948246181510df6e56f45ad4955032c2/src/main/components/lightning/SVGLibrary/stamper.js#L38-L60
+function fetchSvg(url) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.send();
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          resolve(xhr.responseText);
+        } else {
+          reject(xhr);
+        }
+      }
+    };
+  });
+}
+
+// Which looks like it was inspired by https://github.com/jonathantneal/svg4everybody/blob/377d27208fcad3671ed466e9511556cb9c8b5bd8/lib/svg4everybody.js#L92-L107
+// Modify at your own risk!
+
+const newerIEUA = /\bTrident\/[567]\b|\bMSIE (?:9|10)\.0\b/;
+const webkitUA = /\bAppleWebKit\/(\d+)\b/;
+const olderEdgeUA = /\bEdge\/12\.(\d+)\b/;
+const isIE = newerIEUA.test(navigator.userAgent) || (navigator.userAgent.match(olderEdgeUA) || [])[1] < 10547 || (navigator.userAgent.match(webkitUA) || [])[1] < 537;
+const supportsSvg = !isIE && !isIframeInEdge;
+
+/**
+This polyfill injects SVG sprites into the document for clients that don't
+fully support SVG. We do this globally at the document level for performance
+reasons. This causes us to lose namespacing of IDs across sprites. For example,
+if both #image from utility sprite and #image from doctype sprite need to be
+rendered on the page, both end up as #image from the doctype sprite (last one
+wins). SLDS cannot change their image IDs due to backwards-compatibility
+reasons so we take care of this issue at runtime by adding namespacing as we
+polyfill SVG elements.
+
+For example, given "/assets/icons/action-sprite/svg/symbols.svg#approval", we
+replace the "#approval" id with "#${namespace}-approval" and a similar
+operation is done on the corresponding symbol element.
+**/
+const svgTagName = /svg/i;
+
+const isSvgElement = el => el && svgTagName.test(el.nodeName);
+
+const requestCache = {};
+const symbolEls = {};
+const svgFragments = {};
+const spritesContainerId = 'slds-svg-sprites';
+let spritesEl;
+function polyfill(el) {
+  if (!supportsSvg && isSvgElement(el)) {
+    if (!spritesEl) {
+      spritesEl = document.createElement('svg');
+      spritesEl.xmlns = 'http://www.w3.org/2000/svg';
+      spritesEl['xmlns:xlink'] = 'http://www.w3.org/1999/xlink';
+      spritesEl.style.display = 'none';
+      spritesEl.id = spritesContainerId;
+      document.body.insertBefore(spritesEl, document.body.childNodes[0]);
+    }
+
+    Array.from(el.getElementsByTagName('use')).forEach(use => {
+      // We access the href differently in raptor and in aura, probably
+      // due to difference in the way the svg is constructed.
+      const src = use.getAttribute('xlink:href') || use.getAttribute('href');
+
+      if (src) {
+        // "/assets/icons/action-sprite/svg/symbols.svg#approval" =>
+        // ["/assets/icons/action-sprite/svg/symbols.svg", "approval"]
+        const parts = src.split('#');
+        const url = parts[0];
+        const id = parts[1];
+        const namespace = url.replace(/[^\w]/g, '-');
+        const href = `#${namespace}-${id}`;
+
+        if (url.length) {
+          // set the HREF value to no longer be an external reference
+          if (use.getAttribute('xlink:href')) {
+            use.setAttribute('xlink:href', href);
+          } else {
+            use.setAttribute('href', href);
+          } // only insert SVG content if it hasn't already been retrieved
+
+
+          if (!requestCache[url]) {
+            requestCache[url] = fetchSvg(url);
+          }
+
+          requestCache[url].then(svgContent => {
+            // create a document fragment from the svgContent returned (is parsed by HTML parser)
+            if (!svgFragments[url]) {
+              const svgFragment = document.createRange().createContextualFragment(svgContent);
+              svgFragments[url] = svgFragment;
+            }
+
+            if (!symbolEls[href]) {
+              const svgFragment = svgFragments[url];
+              const symbolEl = svgFragment.querySelector(`#${id}`);
+              symbolEls[href] = true;
+              symbolEl.id = `${namespace}-${id}`;
+              spritesEl.appendChild(symbolEl);
+            }
+          });
+        }
+      }
+    });
+  }
+}
+
+const validNameRe = /^([a-zA-Z]+):([a-zA-Z]\w*)$/;
+const underscoreRe = /_/g;
+let pathPrefix;
+const tokenNameMap = Object.assign(Object.create(null), {
+  action: 'lightning.actionSprite',
+  custom: 'lightning.customSprite',
+  doctype: 'lightning.doctypeSprite',
+  standard: 'lightning.standardSprite',
+  utility: 'lightning.utilitySprite'
+});
+const defaultTokenValueMap = Object.assign(Object.create(null), {
+  'lightning.actionSprite': '/assets/icons/action-sprite/svg/symbols.svg',
+  'lightning.customSprite': '/assets/icons/custom-sprite/svg/symbols.svg',
+  'lightning.doctypeSprite': '/assets/icons/doctype-sprite/svg/symbols.svg',
+  'lightning.standardSprite': '/assets/icons/standard-sprite/svg/symbols.svg',
+  'lightning.utilitySprite': '/assets/icons/utility-sprite/svg/symbols.svg'
+});
+
+const getDefaultBaseIconPath = category => defaultTokenValueMap[tokenNameMap[category]];
+
+const getBaseIconPath = category => getToken(tokenNameMap[category]) || getDefaultBaseIconPath(category);
+
+const getMatchAtIndex = index => iconName => {
+  const result = validNameRe.exec(iconName);
+  return result ? result[index] : '';
+};
+
+const getCategory = getMatchAtIndex(1);
+const getName = getMatchAtIndex(2);
+const isValidName = iconName => validNameRe.test(iconName);
+const getIconPath = iconName => {
+  pathPrefix = pathPrefix !== undefined ? pathPrefix : getPathPrefix();
+
+  if (isValidName(iconName)) {
+    const baseIconPath = getBaseIconPath(getCategory(iconName));
+
+    if (baseIconPath) {
+      // This check was introduced the following MS-Edge issue:
+      // https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/9655192/
+      // If and when this get fixed, we can safely remove this block of code.
+      if (isIframeInEdge) {
+        // protocol => 'https:' or 'http:'
+        // host => hostname + port
+        const origin = `${window.location.protocol}//${window.location.host}`;
+        return `${origin}${pathPrefix}${baseIconPath}#${getName(iconName)}`;
+      }
+
+      return `${pathPrefix}${baseIconPath}#${getName(iconName)}`;
+    }
+  }
+
+  return '';
+};
+const computeSldsClass = iconName => {
+  if (isValidName(iconName)) {
+    const category = getCategory(iconName);
+    const name = getName(iconName).replace(underscoreRe, '-');
+    return `slds-icon-${category}-${name}`;
+  }
+
+  return '';
+};
+// https://git.soma.salesforce.com/aura/lightning-global/blob/82e8bfd02846fa7e6b3e7549a64be95b619c4b1f/src/main/components/lightning/primitiveIcon/primitiveIconHelper.js#L53-L56
+
+function safariA11yPatch(svgElement) {
+  if (!svgElement) {
+    return;
+  } // In case we're dealing with a proxied element.
+
+
+  svgElement = Engine.unwrap(svgElement);
+  const use = svgElement.querySelector('use');
+
+  if (!use) {
+    return;
+  }
+
+  svgElement.insertBefore(document.createTextNode('\n'), use); // If use.nextSibling is null, the text node is added to the end of
+  // the list of children of the SVG element.
+  // https://developer.mozilla.org/en-US/docs/Web/API/Node/insertBefore
+
+  svgElement.insertBefore(document.createTextNode('\n'), use.nextSibling);
+}
+
+function style(token) {
+   return `/*
+"Temporary" fix for Edge SVG quirk. We can remove this when it is fixed either
+at the SLDS level or at the browser level.
+ https://git.soma.salesforce.com/aura/lightning-global/issues/1349
+*/
+@supports (-ms-ime-align:auto) {
+    svg[${token}] {
+        pointer-events: none;
+    }
+}
+`;
+}
+
+function tmpl($api, $cmp, $slotset, $ctx) {
+  const {
+    h: api_element
+  } = $api;
+
+  return [api_element("svg", {
+    className: $cmp.computedClass,
+    attrs: {
+      "focusable": "false",
+      "data-key": $cmp.name,
+      "aria-hidden": "true"
+    },
+    key: 2
+  }, [api_element("use", {
+    attrs: {
+      "xlink:href": $cmp.href
+    },
+    key: 1
+  }, [])])];
+}
+
+if (style) {
+    tmpl.hostToken = 'lightning-primitive-icon_primitive-icon-host';
+    tmpl.shadowToken = 'lightning-primitive-icon_primitive-icon';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-primitive-icon_primitive-icon';
+    style$$1.textContent = style('lightning-primitive-icon_primitive-icon');
+    document.head.appendChild(style$$1);
+}
+
+class LightningPrimitiveIcon extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.iconName = void 0, this.src = void 0, this.svgClass = void 0, this.size = 'medium', this.variant = void 0, _temp;
+  }
+
+  renderedCallback() {
+    if (this.iconName !== this.prevIconName) {
+      this.prevIconName = this.iconName;
+      const svgElement = this.template.querySelector('svg');
+      polyfill(svgElement);
+      safariA11yPatch(svgElement);
+    }
+  }
+
+  get href() {
+    return this.src || getIconPath(this.iconName);
+  }
+
+  get name() {
+    return getName(this.iconName);
+  }
+
+  get normalizedSize() {
+    return normalizeString(this.size, {
+      fallbackValue: 'medium',
+      validValues: ['xx-small', 'x-small', 'small', 'medium', 'large']
+    });
+  }
+
+  get normalizedVariant() {
+    // NOTE: Leaving a note here because I just wasted a bunch of time
+    // investigating why both 'bare' and 'inverse' are supported in
+    // lightning-primitive-icon. lightning-icon also has a deprecated
+    // 'bare', but that one is synonymous to 'inverse'. This 'bare' means
+    // that no classes should be applied. So this component needs to
+    // support both 'bare' and 'inverse' while lightning-icon only needs to
+    // support 'inverse'.
+    return normalizeString(this.variant, {
+      fallbackValue: '',
+      validValues: ['bare', 'error', 'inverse', 'warning']
+    });
+  }
+
+  get computedClass() {
+    const {
+      normalizedSize,
+      normalizedVariant
+    } = this;
+    const classes = classSet(this.svgClass);
+
+    if (normalizedVariant !== 'bare') {
+      classes.add('slds-icon');
+    }
+
+    switch (normalizedVariant) {
+      case 'error':
+        classes.add('slds-icon-text-error');
+        break;
+
+      case 'warning':
+        classes.add('slds-icon-text-warning');
+        break;
+
+      case 'inverse':
+      case 'bare':
+        break;
+
+      default:
+        // if custom icon is set, we don't want to set
+        // the text-default class
+        if (!this.src) {
+          classes.add('slds-icon-text-default');
+        }
+
+    }
+
+    if (normalizedSize !== 'medium') {
+      classes.add(`slds-icon_${normalizedSize}`);
+    }
+
+    return classes.toString();
+  }
+
+  render() {
+    return tmpl;
+  }
+
+}
+LightningPrimitiveIcon.publicProps = {
+  iconName: {
+    config: 0
+  },
+  src: {
+    config: 0
+  },
+  svgClass: {
+    config: 0
+  },
+  size: {
+    config: 0
+  },
+  variant: {
+    config: 0
+  }
+};
+
+var labelButtonAlternativeText = 'Help';
+
+const style$1 = undefined;
+
+function tmpl$1($api, $cmp, $slotset, $ctx) {
+  const {
+    h: api_element
+  } = $api;
+
+  return [api_element("div", {
+    classMap: {
+      "slds-popover__body": true
+    },
+    attrs: {
+      "id": $cmp.contentId
+    },
+    key: 1
+  }, [])];
+}
+
+if (style$1) {
+    tmpl$1.hostToken = 'lightning-primitive-bubble_primitive-bubble-host';
+    tmpl$1.shadowToken = 'lightning-primitive-bubble_primitive-bubble';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-primitive-bubble_primitive-bubble';
+    style$$1.textContent = style$1('lightning-primitive-bubble_primitive-bubble');
+    document.head.appendChild(style$$1);
+}
+
+const DEFAULT_ALIGN = {
+  horizontal: 'left',
+  vertical: 'bottom'
+};
+class LightningPrimitiveBubble extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.state = {
+      visible: false
+    }, this.contentId = '', _temp;
+  }
+
+  connectedCallback() {
+    this.updateClassList();
+    this.state.inDOM = true;
+  }
+
+  disconnectedCallback() {
+    this.state.inDOM = false;
+  }
+
+  renderedCallback() {
+    // set content manually once rendered
+    // - this is required to avoid the content update being in the wrong 'tick'
+    this.setContentManually();
+  }
+
+  set content(value) {
+    this.state.content = value;
+
+    if (this.state.inDOM) {
+      this.setContentManually();
+    }
+  }
+
+  get content() {
+    return this.state.content || '';
+  }
+
+  get align() {
+    return this.state.align || DEFAULT_ALIGN;
+  }
+
+  set align(value) {
+    this.state.align = value;
+    this.updateClassList();
+  }
+
+  get visible() {
+    return this.state.visible;
+  }
+
+  set visible(value) {
+    this.state.visible = value;
+    this.updateClassList();
+  } // manually set the content value
+
+
+  setContentManually() {
+    /* manipulate DOM directly */
+    this.template.querySelector('.slds-popover__body').textContent = this.state.content;
+  } // compute class value for this bubble
+
+
+  updateClassList() {
+    const classes = classSet('slds-popover').add('slds-popover_tooltip'); // show or hide bubble
+
+    classes.add({
+      'slds-rise-from-ground': this.visible,
+      'slds-fall-into-ground': !this.visible
+    }); // apply the proper nubbin CSS class
+
+    const {
+      horizontal,
+      vertical
+    } = this.align;
+    classes.add({
+      'slds-nubbin_top-left': horizontal === 'left' && vertical === 'top',
+      'slds-nubbin_top-right': horizontal === 'right' && vertical === 'top',
+      'slds-nubbin_bottom-left': horizontal === 'left' && vertical === 'bottom',
+      'slds-nubbin_bottom-right': horizontal === 'right' && vertical === 'bottom',
+      'slds-nubbin_bottom': horizontal === 'center' && vertical === 'bottom',
+      'slds-nubbin_top': horizontal === 'center' && vertical === 'top',
+      'slds-nubbin_left': horizontal === 'left' && vertical === 'center',
+      'slds-nubbin_right': horizontal === 'right' && vertical === 'center'
+    });
+    classListMutation(this.classList, classes);
+  }
+
+  render() {
+    return tmpl$1;
+  }
+
+}
+LightningPrimitiveBubble.publicProps = {
+  contentId: {
+    config: 0
+  },
+  content: {
+    config: 3
+  },
+  align: {
+    config: 3
+  },
+  visible: {
+    config: 3
+  }
+};
+LightningPrimitiveBubble.track = {
+  state: 1
+};
+
+const style$2 = undefined;
+
+function tmpl$2($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    d: api_dynamic,
+    h: api_element
+  } = $api;
+
+  return [api_element("div", {
+    classMap: {
+      "slds-form-element__icon": true,
+      "slds-align-middle": true
+    },
+    key: 4
+  }, [api_element("button", {
+    classMap: {
+      "slds-button": true,
+      "slds-button_icon": true
+    },
+    attrs: {
+      "type": "button",
+      "aria-describedby": $cmp.computedBubbleUniqueId
+    },
+    key: 3
+  }, [api_custom_element("lightning-primitive-icon", LightningPrimitiveIcon, {
+    props: {
+      "svgClass": $cmp.computedSvgClass,
+      "iconName": $cmp.computedIconName,
+      "variant": "bare"
+    },
+    key: 1
+  }, []), api_element("span", {
+    classMap: {
+      "slds-assistive-text": true
+    },
+    key: 2
+  }, [api_dynamic($cmp.i18n.buttonAlternativeText)])])])];
+}
+
+if (style$2) {
+    tmpl$2.hostToken = 'lightning-helptext_helptext-host';
+    tmpl$2.shadowToken = 'lightning-helptext_helptext';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-helptext_helptext';
+    style$$1.textContent = style$2('lightning-helptext_helptext');
+    document.head.appendChild(style$$1);
+}
+
+const isiOS = !!navigator.platform && ['iPad', 'iPhone', 'iPod'].indexOf(navigator.platform) >= 0;
+
+function getBubbleAlignAndPosition(triggerBoundingClientRect, bubbleBoundingClientRect, defaultAlign, shiftAmounts, availableHeight, availableWidth, xOffset, yOffset) {
+  let align = {
+    horizontal: defaultAlign.horizontal,
+    vertical: defaultAlign.vertical
+  };
+  let positionAt = {
+    top: null,
+    right: null,
+    bottom: null,
+    left: null
+  };
+  const bubbleOverflows = getBubbleOverflows(triggerBoundingClientRect, bubbleBoundingClientRect, shiftAmounts, availableWidth, availableHeight); // evaluate where the bubble should be positioned
+
+  const alignAndPosition = calculateAlignAndPosition(align, positionAt, bubbleOverflows, triggerBoundingClientRect, bubbleBoundingClientRect, availableWidth, availableHeight);
+  align = alignAndPosition.alignment;
+  positionAt = alignAndPosition.positioning;
+  const result = {
+    align
+  }; // assign default values for position bottom & left based on trigger element if needed
+  // - default anchor point of popover is bottom center attached to trigger element's top center
+
+  positionAt.bottom = positionAt.top || positionAt.top === 0 ? null : availableHeight - triggerBoundingClientRect.top; // set the left positioning default according to vertical alignment when needed
+
+  let defaultLeft = align.vertical === 'center' ? triggerBoundingClientRect.right : triggerBoundingClientRect.left; // don't use the default if we already have a value
+
+  if (positionAt.left) {
+    defaultLeft = positionAt.left;
+  }
+
+  positionAt.left = positionAt.right || positionAt.right === 0 ? null : defaultLeft;
+  const shiftByVertical = align.vertical === 'center' ? 0 : shiftAmounts.vertical;
+  let shiftByHorizontal = align.horizontal === 'center' ? 0 : shiftAmounts.horizontal; // Change horizontal shift value to opposite value (negative or positive)
+  // :: needed to push the bubble away from the trigger instead of into it when positioned on left or right
+
+  if (align.vertical === 'center') {
+    shiftByHorizontal *= -1;
+  } // apply calculated position values
+
+
+  result.top = positionAt.top ? positionAt.top + shiftByVertical + yOffset + 'px' : positionAt.top;
+  result.right = positionAt.right ? positionAt.right - shiftByHorizontal - xOffset + 'px' : positionAt.right;
+  result.bottom = positionAt.bottom ? positionAt.bottom + shiftByVertical - yOffset + 'px' : positionAt.bottom;
+  result.left = positionAt.left ? positionAt.left - shiftByHorizontal + xOffset + 'px' : positionAt.left;
+  return result;
+}
+function getNubbinShiftAmount(nubbinComputedStyles, triggerWidth) {
+  // calculate smallest positive value of horizontal nubbin distance, right or left
+  // - the nubbin is the pointy element on the bubble
+  const nubbinShiftLeft = parseInt(nubbinComputedStyles.left, 10) || -1;
+  const nubbinShiftRight = parseInt(nubbinComputedStyles.right, 10) || -1; // check which measurement is the lesser of the two (closest to edge)
+
+  let nubbinShift = nubbinShiftLeft < nubbinShiftRight ? nubbinShiftLeft : nubbinShiftRight; // use the positive, greater than zero, shift value
+
+  if (nubbinShift < 0 && nubbinShiftLeft < 0 && nubbinShiftRight > 0) {
+    nubbinShift = nubbinShiftRight;
+  }
+
+  if (nubbinShift < 0 && nubbinShiftRight < 0 && nubbinShiftLeft > 0) {
+    nubbinShift = nubbinShiftLeft;
+  }
+
+  return {
+    horizontal: nubbinShift - triggerWidth / 2,
+    // prettier-ignore
+    vertical: parseInt(nubbinComputedStyles.height, 10)
+  };
+} //
+// Utility functions (for reduced complexity)
+//
+
+function getBubbleOverflows(triggerBoundingClientRect, bubbleBoundingClientRect, shiftAmounts, availableWidth, availableHeight) {
+  const bubbleOverflows = {}; // evaluate in which directions the bubble overflows
+  // is the bubble overflowing if positioned above the trigger?
+
+  bubbleOverflows.top = triggerBoundingClientRect.top - (bubbleBoundingClientRect.height + shiftAmounts.vertical) < 0; // is the bubble overflowing if halfway positioned above the trigger?
+  // :: useful for vertical center calculation
+
+  bubbleOverflows.topCenter = triggerBoundingClientRect.top - bubbleBoundingClientRect.height / 2 < 0; // is the bubble overflowing if positioned below the trigger?
+
+  bubbleOverflows.bottom = triggerBoundingClientRect.bottom + bubbleBoundingClientRect.height + shiftAmounts.vertical > availableHeight; // is the bubble overflowing if positioned to the right of the trigger?
+
+  bubbleOverflows.right = triggerBoundingClientRect.left + bubbleBoundingClientRect.width > availableWidth; // is the bubble overflowing if halfway positioned to the right of the trigger?
+  // :: useful for horizontal center calculation
+
+  bubbleOverflows.rightCenter = triggerBoundingClientRect.left + bubbleBoundingClientRect.width / 2 > availableWidth; // is the bubble overflowing if positioned to the left of the trigger?
+
+  bubbleOverflows.left = triggerBoundingClientRect.right - bubbleBoundingClientRect.width < 0; // is the bubble overflowing if halfway positioned to the left of the trigger?
+  // :: useful for horizontal center calculation
+
+  bubbleOverflows.leftCenter = triggerBoundingClientRect.right - bubbleBoundingClientRect.width / 2 < 0;
+  return bubbleOverflows;
+}
+
+function calculateAlignAndPosition(align, positionAt, bubbleOverflows, triggerBoundingClientRect, bubbleBoundingClientRect, availableWidth, availableHeight) {
+  let bubbleIsVerticallyCentered = false; // if enough space to be vertically centered from top
+
+  if (bubbleOverflows.top && !bubbleOverflows.topCenter) {
+    align.vertical = 'center'; // set the bubble to be vertically centered on the trigger
+    // top position of the bubble to match the following formula:
+    //  <bottom of trigger> - <half the height of trigger> - <half the height of the bubble>
+
+    positionAt.top = triggerBoundingClientRect.bottom - triggerBoundingClientRect.height / 2 - bubbleBoundingClientRect.height / 2;
+    bubbleIsVerticallyCentered = true; // if overflows upwards show below trigger
+  } else if (bubbleOverflows.top) {
+    align.vertical = 'top';
+    positionAt.top = triggerBoundingClientRect.bottom;
+  } // if overflows downward show above the trigger
+
+
+  if (bubbleOverflows.bottom) {
+    align.vertical = 'bottom';
+    positionAt.bottom = availableHeight - triggerBoundingClientRect.top;
+  } // if vertically centered and overflows left then show on right
+
+
+  if (bubbleIsVerticallyCentered && bubbleOverflows.left) {
+    align.horizontal = 'left';
+    positionAt.left = triggerBoundingClientRect.right; // if overflows to the left show on right
+  } else if (bubbleOverflows.left) {
+    align.horizontal = 'left';
+    positionAt.left = triggerBoundingClientRect.left;
+  } // if vertically centered and overflows right then show on left
+
+
+  if (bubbleIsVerticallyCentered && bubbleOverflows.right) {
+    align.horizontal = 'right';
+    positionAt.right = availableWidth - triggerBoundingClientRect.left; // if overflows to the right show on left
+  } else if (bubbleOverflows.right) {
+    align.horizontal = 'right';
+    positionAt.right = availableWidth - triggerBoundingClientRect.right;
+  } // only horizontally center bubble if it would overflow to the right or left
+
+
+  if (bubbleOverflows.left && bubbleOverflows.right && !bubbleOverflows.leftCenter && !bubbleOverflows.rightCenter) {
+    align.horizontal = 'center'; // set the bubble to be horizontally centered on the trigger
+    // left position of the bubble to match the following formula:
+    //  <left edge of trigger> - <half the width of trigger> - <half the width of the bubble>
+
+    positionAt.left = triggerBoundingClientRect.left + triggerBoundingClientRect.width / 2 - bubbleBoundingClientRect.width / 2;
+    positionAt.right = null;
+  }
+
+  return {
+    alignment: align,
+    positioning: positionAt
+  };
+}
+
+const i18n = {
+  buttonAlternativeText: labelButtonAlternativeText
+}; // generate a unique ID
+
+const BUBBLE_ID = `salesforce-lightning-helptext-bubble_${guid()}`;
+const CACHED_BUBBLE_ELEMENT = Engine.createElement('lightning-primitive-bubble', {
+  is: LightningPrimitiveBubble
+});
+CACHED_BUBBLE_ELEMENT.contentId = BUBBLE_ID;
+CACHED_BUBBLE_ELEMENT.style.position = 'absolute';
+CACHED_BUBBLE_ELEMENT.style.minWidth = '75px';
+const DEFAULT_ICON_NAME = 'utility:info';
+const DEFAULT_ANCHORING = {
+  trigger: {
+    horizontal: 'left',
+    vertical: 'top'
+  },
+  bubble: {
+    horizontal: 'left',
+    vertical: 'bottom'
+  }
+};
+class LightningHelptext extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.content = '', this.iconName = DEFAULT_ICON_NAME, this.iconVariant = 'bare', this.state = {}, this._initialRender = true, this.handleBrowserEvent = () => {
+      // only perform changes for the currently focused/active trigger
+      if (this.state.currentTrigger === true) {
+        this.setBubblePosition();
+      }
+    }, _temp;
+  }
+
+  connectedCallback() {
+    // watch for resize & scroll events to recalculate when needed
+    window.addEventListener('resize', this.handleBrowserEvent, false);
+    window.addEventListener('scroll', this.handleBrowserEvent, true);
+  }
+
+  renderedCallback() {
+    if (this._initialRender) {
+      const buttonEle = this.template.querySelector('button');
+
+      if (isiOS && 'ontouchstart' in document.documentElement) {
+        buttonEle.addEventListener('touchstart', this.handleTouch.bind(this));
+      } else {
+        buttonEle.addEventListener('mouseover', this.handleMouseOver.bind(this));
+        buttonEle.addEventListener('mouseout', this.handleMouseOut.bind(this));
+        buttonEle.addEventListener('focusin', this.handleFocus.bind(this));
+        buttonEle.addEventListener('focusout', this.handleBlur.bind(this));
+      }
+    }
+
+    this._initialRender = false;
+  }
+
+  disconnectedCallback() {
+    // remove event listeners
+    window.removeEventListener('resize', this.handleBrowserEvent, false);
+    window.removeEventListener('scroll', this.handleBrowserEvent, true);
+  }
+
+  get i18n() {
+    return i18n;
+  } // compute icon name
+
+
+  get computedIconName() {
+    if (isValidName(this.iconName)) {
+      return this.iconName;
+    }
+
+    return DEFAULT_ICON_NAME;
+  } // compute SVG CSS classes to apply to the icon
+
+
+  get computedSvgClass() {
+    const classes = classSet('slds-button__icon');
+
+    switch (this.normalizedIconVariant) {
+      case 'error':
+        classes.add('slds-icon-text-error');
+        break;
+
+      case 'warning':
+        classes.add('slds-icon-text-warning');
+        break;
+
+      case 'inverse':
+      case 'bare':
+        break;
+
+      default:
+        // if custom icon is set, we don't want to set
+        // the text-default class
+        classes.add('slds-icon-text-default');
+    }
+
+    return classes.toString();
+  }
+
+  get normalizedIconVariant() {
+    // NOTE: Leaving a note here because I just wasted a bunch of time
+    // investigating why both 'bare' and 'inverse' are supported in
+    // lightning-primitive-icon. lightning-icon also has a deprecated
+    // 'bare', but that one is synonymous to 'inverse'. This 'bare' means
+    // that no classes should be applied. So this component needs to
+    // support both 'bare' and 'inverse' while lightning-icon only needs to
+    // support 'inverse'.
+    return normalizeString(this.iconVariant, {
+      fallbackValue: 'bare',
+      validValues: ['bare', 'error', 'inverse', 'warning']
+    });
+  }
+
+  handleTouch() {
+    if (this.state.currentTrigger === true) {
+      this.hideBubble();
+    } else {
+      this.showBubble();
+    }
+  } // compute bubble's unique ID
+
+
+  get computedBubbleUniqueId() {
+    return BUBBLE_ID;
+  } // handle mouse over event
+
+
+  handleMouseOver() {
+    this.showBubble();
+  } // handle mouse out event
+
+
+  handleMouseOut() {
+    this.hideBubble();
+  } // handle focus
+
+
+  handleFocus() {
+    this.showBubble();
+  } // handle blur
+
+
+  handleBlur() {
+    this.hideBubble();
+  } // handle resize + scroll event
+
+
+  // retrieve trigger element bounding rectangle
+  getTriggerBoundingRect() {
+    const triggerEl = this.template.querySelector('div');
+    return triggerEl ? triggerEl.getBoundingClientRect() : null;
+  } // retrieve bubble element bounding rectangle (raw)
+
+
+  getBubbleBoundingRect() {
+    const bubbleEl = CACHED_BUBBLE_ELEMENT; // initialize position in top left corner
+
+    bubbleEl.style.top = 0;
+    bubbleEl.style.left = 0;
+    bubbleEl.style.removeProperty('bottom');
+    bubbleEl.style.removeProperty('right');
+    return bubbleEl ? bubbleEl.getBoundingClientRect() : null;
+  } // show bubble
+
+
+  showBubble() {
+    // set the triggered by element
+    this.state.currentTrigger = true;
+    const bubbleEl = CACHED_BUBBLE_ELEMENT;
+    this.initBubble();
+    this.setBubblePosition();
+    bubbleEl.visible = true;
+  } // hide bubble
+
+
+  hideBubble() {
+    const bubbleEl = CACHED_BUBBLE_ELEMENT; // remove the triggered by value
+
+    this.state.currentTrigger = false;
+    bubbleEl.visible = false;
+  } // calculate shift amounts
+
+
+  calculateShiftAmounts() {
+    // only calculate once
+    if (typeof this.shiftAmounts === 'undefined') {
+      const bubbleEl = CACHED_BUBBLE_ELEMENT; // initialize position in top left corner
+
+      bubbleEl.style.top = 0;
+      bubbleEl.style.left = 0;
+      bubbleEl.style.removeProperty('bottom');
+      bubbleEl.style.removeProperty('right'); // calculate initial position of trigger element
+
+      const triggerElRect = this.getTriggerBoundingRect(); // calculate shift to align nubbin
+
+      const nubbinComputedStyles = window.getComputedStyle(bubbleEl, ':before') || bubbleEl.style;
+      this.shiftAmounts = getNubbinShiftAmount(nubbinComputedStyles, triggerElRect.width);
+    }
+  } // initialize bubble element
+
+
+  initBubble() {
+    const bubbleEl = CACHED_BUBBLE_ELEMENT; // set the content value
+
+    bubbleEl.content = this.content; // check if bubble element is already in DOM
+
+    if (bubbleEl.parentNode === null) {
+      document.body.appendChild(bubbleEl);
+    }
+
+    this.calculateShiftAmounts();
+  } // set the position of the bubble relative to its target
+
+
+  setBubblePosition() {
+    const rootEl = document.documentElement;
+    const bubbleEl = CACHED_BUBBLE_ELEMENT;
+    const result = getBubbleAlignAndPosition(this.getTriggerBoundingRect(), this.getBubbleBoundingRect(), DEFAULT_ANCHORING.bubble, this.shiftAmounts, rootEl.clientHeight || window.innerHeight, rootEl.clientWidth || window.innerWidth, window.pageXOffset, window.pageYOffset);
+    bubbleEl.align = result.align;
+    bubbleEl.style.top = result.top;
+    bubbleEl.style.right = result.right;
+    bubbleEl.style.bottom = result.bottom;
+    bubbleEl.style.left = result.left;
+  }
+
+  render() {
+    return tmpl$2;
+  }
+
+}
+LightningHelptext.publicProps = {
+  content: {
+    config: 0
+  },
+  iconName: {
+    config: 0
+  },
+  iconVariant: {
+    config: 0
+  }
+};
+LightningHelptext.track = {
+  state: 1
+};
+
+// https://stackoverflow.com/questions/17447373/how-can-i-target-only-internet-explorer-11-with-javascript
+// this function only for testing purposes
+const isIE11Fn = ua => /Trident.*rv[ :]*11\./.test(ua);
+const isIE11$1 = isIE11Fn(navigator.userAgent);
+
+const style$3 = undefined;
+
+function tmpl$3($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    d: api_dynamic,
+    h: api_element
+  } = $api;
+
+  return [api_custom_element("lightning-primitive-icon", LightningPrimitiveIcon, {
+    props: {
+      "iconName": $cmp.state.iconName,
+      "size": $cmp.size,
+      "variant": $cmp.variant,
+      "src": $cmp.state.src
+    },
+    key: 1
+  }, []), $cmp.alternativeText ? api_element("span", {
+    classMap: {
+      "slds-assistive-text": true
+    },
+    key: 2
+  }, [api_dynamic($cmp.alternativeText)]) : null];
+}
+
+if (style$3) {
+    tmpl$3.hostToken = 'lightning-icon_icon-host';
+    tmpl$3.shadowToken = 'lightning-icon_icon';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-icon_icon';
+    style$$1.textContent = style$3('lightning-icon_icon');
+    document.head.appendChild(style$$1);
+}
+
+class LightningIcon extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.state = {}, this.alternativeText = void 0, _temp;
+  }
+
+  get src() {
+    return this.privateSrc;
+  }
+
+  set src(value) {
+    this.privateSrc = value; // if value is not present, then we set the state back
+    // to the original iconName that was passed
+    // this might happen if the user sets a custom icon, then
+    // decides to revert back to SLDS by removing the src attribute
+
+    if (!value) {
+      this.state.iconName = this.iconName;
+      this.classList.remove('slds-icon-standard-default');
+    } // if isIE11 and the src is set
+    // we'd like to show the 'standard:default' icon instead
+    // for performance reasons.
+
+
+    if (value && isIE11$1) {
+      this.setDefault();
+      return;
+    }
+
+    this.state.src = value;
+  }
+
+  get iconName() {
+    return this.privateIconName;
+  }
+
+  set iconName(value) {
+    this.privateIconName = value; // if src is set, we don't need to validate
+    // iconName
+
+    if (this.src) {
+      return;
+    }
+
+    if (isValidName(value)) {
+      const isAction = getCategory(value) === 'action'; // update classlist only if new iconName is different than state.iconName
+      // otherwise classListMutation receives class:true and class: false and removes slds class
+
+      if (value !== this.state.iconName) {
+        classListMutation(this.classList, {
+          'slds-icon_container_circle': isAction,
+          [computeSldsClass(value)]: true,
+          [computeSldsClass(this.state.iconName)]: false
+        });
+      }
+
+      this.state.iconName = value;
+    } else {
+      console.warn(`${this} Invalid icon name ${value}`); // eslint-disable-line no-console
+      // Invalid icon names should render a blank icon. Remove any
+      // classes that might have been previously added.
+
+      classListMutation(this.classList, {
+        'slds-icon_container_circle': false,
+        [computeSldsClass(this.state.iconName)]: false
+      });
+      this.state.iconName = undefined;
+    }
+  }
+
+  get size() {
+    return normalizeString(this.state.size, {
+      fallbackValue: 'medium',
+      validValues: ['xx-small', 'x-small', 'small', 'medium', 'large']
+    });
+  }
+
+  set size(value) {
+    this.state.size = value;
+  }
+
+  get variant() {
+    return normalizeVariant(this.state.variant, this.state.iconName);
+  }
+
+  set variant(value) {
+    this.state.variant = value;
+  }
+
+  connectedCallback() {
+    this.classList.add('slds-icon_container');
+  }
+
+  setDefault() {
+    this.state.src = undefined;
+    this.state.iconName = 'standard:default';
+    this.classList.add('slds-icon-standard-default');
+  }
+
+  render() {
+    return tmpl$3;
+  }
+
+}
+LightningIcon.publicProps = {
+  alternativeText: {
+    config: 0
+  },
+  src: {
+    config: 3
+  },
+  iconName: {
+    config: 3
+  },
+  size: {
+    config: 3
+  },
+  variant: {
+    config: 3
+  }
+};
+LightningIcon.track = {
+  state: 1
+};
+
+function normalizeVariant(variant, iconName) {
+  // Unfortunately, the `bare` variant was implemented to do what the
+  // `inverse` variant should have done. Keep this logic for as long as
+  // we support the `bare` variant.
+  if (variant === 'bare') {
+    // TODO: Deprecation warning using strippable assertion
+    variant = 'inverse';
+  }
+
+  if (getCategory(iconName) === 'utility') {
+    return normalizeString(variant, {
+      fallbackValue: '',
+      validValues: ['error', 'inverse', 'warning']
+    });
+  }
+
+  return 'inverse';
+}
+
+const style$4 = undefined;
+
+function tmpl$4($api, $cmp, $slotset, $ctx) {
+  const {
+    d: api_dynamic,
+    k: api_key,
+    h: api_element,
+    i: api_iterator,
+    f: api_flatten
+  } = $api;
+
+  return api_flatten([$cmp.hasParts ? api_iterator($cmp.text, function (part) {
+    return [part.highlight ? api_element("strong", {
+      key: api_key(1, part.text)
+    }, [api_dynamic(part.text)]) : null, !part.highlight ? api_dynamic(part.text) : null];
+  }) : [], !$cmp.hasParts ? api_dynamic($cmp.text) : null]);
+}
+
+if (style$4) {
+    tmpl$4.hostToken = 'lightning-base-combobox-formatted-text_base-combobox-formatted-text-host';
+    tmpl$4.shadowToken = 'lightning-base-combobox-formatted-text_base-combobox-formatted-text';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-base-combobox-formatted-text_base-combobox-formatted-text';
+    style$$1.textContent = style$4('lightning-base-combobox-formatted-text_base-combobox-formatted-text');
+    document.head.appendChild(style$$1);
+}
+
+class LightningBaseComboboxFormattedText extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.text = '', _temp;
+  }
+
+  get hasParts() {
+    return Array.isArray(this.text) && this.text.length > 0;
+  }
+
+  render() {
+    return tmpl$4;
+  }
+
+}
+LightningBaseComboboxFormattedText.publicProps = {
+  text: {
+    config: 0
+  }
+};
+
+const style$5 = undefined;
+
+function tmpl$5($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    h: api_element
+  } = $api;
+
+  return [api_element("span", {
+    classMap: {
+      "slds-media__figure": true
+    },
+    key: 2
+  }, [api_custom_element("lightning-icon", LightningIcon, {
+    props: {
+      "size": $cmp.iconSize,
+      "alternativeText": $cmp.item.iconAlternativeText,
+      "iconName": $cmp.item.iconName
+    },
+    key: 1
+  }, [])]), api_element("span", {
+    classMap: {
+      "slds-media__body": true
+    },
+    key: 9
+  }, [api_element("span", {
+    classMap: {
+      "slds-listbox__option-text": true,
+      "slds-listbox__option-text_entity": true
+    },
+    attrs: {
+      "title": $cmp.text
+    },
+    key: 5
+  }, [api_element("span", {
+    classMap: {
+      "slds-truncate": true
+    },
+    key: 4
+  }, [api_custom_element("lightning-base-combobox-formatted-text", LightningBaseComboboxFormattedText, {
+    props: {
+      "text": $cmp.item.text
+    },
+    key: 3
+  }, [])])]), $cmp.hasSubText ? api_element("span", {
+    classMap: {
+      "slds-listbox__option-meta": true,
+      "slds-listbox__option-meta_entity": true
+    },
+    attrs: {
+      "title": $cmp.subText
+    },
+    key: 8
+  }, [api_element("span", {
+    classMap: {
+      "slds-truncate": true
+    },
+    key: 7
+  }, [api_custom_element("lightning-base-combobox-formatted-text", LightningBaseComboboxFormattedText, {
+    props: {
+      "text": $cmp.item.subText
+    },
+    key: 6
+  }, [])])]) : null]), $cmp.item.rightIconName ? api_element("span", {
+    classMap: {
+      "slds-media__figure": true,
+      "slds-media__figure_reverse": true
+    },
+    key: 11
+  }, [api_custom_element("lightning-icon", LightningIcon, {
+    props: {
+      "size": $cmp.rightIconSize,
+      "alternativeText": $cmp.item.rightIconAlternativeText,
+      "iconName": $cmp.item.rightIconName
+    },
+    key: 10
+  }, [])]) : null];
+}
+
+if (style$5) {
+    tmpl$5.hostToken = 'lightning-base-combobox-item_card-host';
+    tmpl$5.shadowToken = 'lightning-base-combobox-item_card';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-base-combobox-item_card';
+    style$$1.textContent = style$5('lightning-base-combobox-item_card');
+    document.head.appendChild(style$$1);
+}
+
+const style$1$1 = undefined;
+
+function tmpl$1$1($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    h: api_element
+  } = $api;
+
+  return [api_element("span", {
+    classMap: {
+      "slds-media__figure": true
+    },
+    key: 2
+  }, [api_custom_element("lightning-icon", LightningIcon, {
+    props: {
+      "alternativeText": $cmp.item.iconAlternativeText,
+      "iconName": $cmp.item.iconName,
+      "size": "x-small"
+    },
+    key: 1
+  }, [])]), api_element("span", {
+    classMap: {
+      "slds-media__body": true
+    },
+    key: 4
+  }, [api_custom_element("lightning-base-combobox-formatted-text", LightningBaseComboboxFormattedText, {
+    classMap: {
+      "slds-truncate": true
+    },
+    props: {
+      "text": $cmp.item.text,
+      "title": $cmp.text
+    },
+    key: 3
+  }, [])])];
+}
+
+if (style$1$1) {
+    tmpl$1$1.hostToken = 'lightning-base-combobox-item_inline-host';
+    tmpl$1$1.shadowToken = 'lightning-base-combobox-item_inline';
+
+    const style = document.createElement('style');
+    style.type = 'text/css';
+    style.dataset.token = 'lightning-base-combobox-item_inline';
+    style.textContent = style$1$1('lightning-base-combobox-item_inline');
+    document.head.appendChild(style);
+}
+
+class LightningBaseComboboxItem extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.item = {}, _temp;
+  }
+
+  connectedCallback() {
+    // We want to make sure that the item has 'aria-selected' if it's selectable
+    if (this.item.selectable) {
+      this.setAttribute('aria-selected', 'false');
+    }
+
+    if (this.isInlineOption) {
+      this.classList.add('slds-media_small');
+      this.classList.add('slds-listbox__option_plain');
+    } else {
+      this.classList.add('slds-listbox__option_entity');
+    }
+  } // Return html based on the specified item type
+
+
+  render() {
+    switch (this.item.type) {
+      case 'option-inline':
+        return tmpl$1$1;
+
+      case 'option-card':
+        return tmpl$5;
+
+      default:
+        return undefined;
+    }
+  }
+
+  highlight() {
+    this.toggleHighlight(true);
+  }
+
+  removeHighlight() {
+    this.toggleHighlight(false);
+  }
+
+  toggleHighlight(highlighted) {
+    if (this.item.selectable) {
+      this.setAttribute('aria-selected', highlighted ? 'true' : 'false');
+      this.classList.toggle('slds-has-focus', highlighted);
+    }
+  } // Parts are needed for highlighting
+
+
+  partsToText(parts) {
+    if (parts && Array.isArray(parts) && parts.length > 0) {
+      return parts.map(part => part.text).join('');
+    }
+
+    return parts;
+  }
+
+  get rightIconSize() {
+    return this.item.rightIconSize || 'small';
+  }
+
+  get iconSize() {
+    return this.item.iconSize || 'small';
+  }
+
+  get text() {
+    return this.partsToText(this.item.text);
+  }
+
+  get subText() {
+    return this.partsToText(this.item.subText);
+  }
+
+  get hasSubText() {
+    return this.item.subText && this.item.subText.length > 0;
+  }
+
+  get isInlineOption() {
+    return this.item.type === 'option-inline';
+  }
+
+}
+LightningBaseComboboxItem.publicProps = {
+  item: {
+    config: 0
+  }
+};
+LightningBaseComboboxItem.publicMethods = ["highlight", "removeHighlight"];
+
+var labelAriaSelectedOptions = 'Selected Options:';
+
+var labelDeselectOptionKeyboard = 'Press delete or backspace to remove';
+
+var labelLoadingText = 'Loading';
+
+var labelPillCloseButtonAlternativeText = 'Clear Selection';
+
+class BrowserWindow {
+  get window() {
+    if (!this._window) {
+      this._window = window;
+    }
+
+    return this._window;
+  }
+
+  mockWindow(value) {
+    // For test, allow mock window.
+    this._window = value;
+  }
+
+  get documentElement() {
+    assert(this.window.document, 'Missing window.document');
+    return this.window.document.documentElement;
+  }
+
+  get MutationObserver() {
+    return this.window.MutationObserver;
+  }
+
+  isWindow(element) {
+    return element && element.toString() === '[object Window]';
+  }
+
+}
+
+const WindowManager = new BrowserWindow(); // A global
+
+let passiveEventsSupported;
+
+function supportsPassiveEvents() {
+  if (typeof passiveEventsSupported !== 'boolean') {
+    passiveEventsSupported = false;
+
+    try {
+      const opts = Object.defineProperty({}, 'passive', {
+        get: () => {
+          passiveEventsSupported = true;
+        }
+      });
+      window.addEventListener('testPassive', null, opts);
+      window.removeEventListener('testPassive', null, opts); // eslint-disable-next-line no-empty
+    } catch (e) {}
+  }
+
+  return passiveEventsSupported;
+}
+
+function attachPassiveEvent(element, eventName, callback) {
+  const options = supportsPassiveEvents() ? {
+    passive: true
+  } : false;
+  element.addEventListener(eventName, callback, options);
+  return () => {
+    element.removeEventListener(eventName, callback, options);
+  };
+}
+
+function enumerateParent(elem, stopEl, checker) {
+  // document.body is not necessarily a body tag, because of the (very rare)
+  // case of a frameset.
+  if (!elem || elem === stopEl || elem === document.body) {
+    return null;
+  } // if overflow is auto and overflow-y is also auto,
+  // however in firefox the opposite is not true
+
+
+  try {
+    // getComputedStyle throws an exception
+    // if elem is not an element
+    // (can happen during unrender)
+    const computedStyle = WindowManager.window.getComputedStyle(elem);
+
+    if (!computedStyle) {
+      return null;
+    }
+
+    if (checker(computedStyle)) {
+      return elem;
+    }
+
+    return enumerateParent(elem.parentNode, stopEl, checker);
+  } catch (e) {
+    return null;
+  }
+}
+
+function getScrollableParent(elem, stopEl) {
+  return enumerateParent(elem, stopEl, computedStyle => {
+    const overflow = computedStyle['overflow-y'];
+    return overflow === 'auto' || overflow === 'scroll';
+  });
+}
+
+function queryOverflowHiddenParent(elem, stopEl) {
+  return enumerateParent(elem, stopEl, computedStyle => {
+    return computedStyle['overflow-x'] === 'hidden' || computedStyle['overflow-y'] === 'hidden';
+  });
+}
+
+function isInDom(el) {
+  if (el === WindowManager.window) {
+    return true;
+  }
+
+  if (el.parentNode && el.parentNode.tagName && el.parentNode.tagName.toUpperCase() === 'BODY') {
+    return true;
+  }
+
+  if (el.parentNode) {
+    return isInDom(el.parentNode);
+  }
+
+  return false;
+}
+function isScrolling(elem) {
+  return elem.scrollHeight > elem.clientHeight;
+}
+function isDomNode(obj) {
+  return obj.nodeType && (obj.nodeType === 1 || obj.nodeType === 11);
+}
+function timeout(time) {
+  return new Promise(resolve => {
+    // eslint-disable-next-line lwc/no-set-timeout
+    setTimeout(() => {
+      resolve();
+    }, time);
+  });
+}
+function containsScrollingElement(list) {
+  const len = list.length;
+
+  if (!len) {
+    return false;
+  }
+
+  for (let i = 0; i < len; i++) {
+    if (isScrolling(list[i])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+function queryScrollableChildren(element) {
+  return element.querySelectorAll('[data-scoped-scroll="true"]');
+}
+function getPositionTarget(element) {
+  return element.tagName === 'TEXTAREA' ? element.parentNode : element;
+}
+let lastId = 1000000;
+function generateUniqueSelector() {
+  return `lgcp-${lastId++}`;
+}
+function normalizeElement(element) {
+  const selector = generateUniqueSelector();
+  element.classList.add(selector);
+  element = document.querySelector('.' + selector);
+
+  if (element.positionId) {
+    element.classList.remove(element.positionId);
+  }
+
+  element.positionId = selector;
+  return element;
+}
+function isInsideModal(element) {
+  if (element.positionId) {
+    return document.querySelector(`.uiModal .${element.positionId}`);
+  }
+
+  return false;
+}
+
+function isInsideOverlay(element) {
+  if (element.positionId) {
+    return document.querySelector(`.uiModal .${element.positionId}`) || document.querySelector(`.uiPanel .${element.positionId}`);
+  }
+
+  return false;
+}
+
+function normalizePosition(element, nextIndex, target, alignWidth) {
+  // Set element position to fixed
+  // 1. element is inside overlay
+  // or 2. When element isn't align with target's width, and target's parent has overflow-x:hidden setting.
+  const isFixed = isInsideOverlay(element) || !alignWidth && queryOverflowHiddenParent(target, WindowManager.window, true);
+  element.style.position = isFixed ? 'fixed' : 'absolute';
+  element.style.zIndex = nextIndex || 0;
+  element.style.left = '-9999px'; // Avoid flicker
+
+  element.style.top = '0px'; // Avoid flicker
+
+  return element;
+}
+function requestAnimationFrameAsPromise() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+const Direction = {
+  Center: 'center',
+  Middle: 'middle',
+  Right: 'right',
+  Left: 'left',
+  Bottom: 'bottom',
+  Top: 'top',
+  Default: 'default'
+};
+const VerticalMap = {
+  top: Direction.Top,
+  bottom: Direction.Bottom,
+  center: Direction.Middle
+};
+const HorizontalMap = {
+  left: Direction.Left,
+  right: Direction.Right,
+  center: Direction.Center
+};
+const FlipMap = {
+  left: Direction.Right,
+  right: Direction.Left,
+  top: Direction.Bottom,
+  bottom: Direction.Top,
+  default: Direction.Right
+};
+
+function getWindowSize() {
+  return {
+    width: WindowManager.window.innerWidth || document.body.clientWidth || 0,
+    height: WindowManager.window.innerHeight || document.body.clientHeight || 0
+  };
+}
+
+function normalizeDirection(direction, defaultValue) {
+  return normalizeString(direction, {
+    fallbackValue: defaultValue || Direction.Default,
+    validValues: [Direction.Center, Direction.Right, Direction.Left, Direction.Bottom, Direction.Top, Direction.Middle, Direction.Default]
+  });
+}
+function mapToHorizontal(value) {
+  value = normalizeDirection(value, Direction.Left);
+  return HorizontalMap[value];
+}
+function mapToVertical(value) {
+  value = normalizeDirection(value, Direction.Left);
+  return VerticalMap[value];
+}
+function flipDirection(value) {
+  value = normalizeDirection(value, Direction.Left);
+  return FlipMap[value];
+}
+function checkFlipPossibility(element, target) {
+  const viewPort = getWindowSize();
+  const elemRect = element.getBoundingClientRect();
+  const referenceElemRect = target.getBoundingClientRect();
+  const height = typeof elemRect.height !== 'undefined' ? elemRect.height : elemRect.bottom - elemRect.top;
+  const width = typeof elemRect.width !== 'undefined' ? elemRect.width : elemRect.right - elemRect.left;
+  const hasSpaceAbove = referenceElemRect.top >= height;
+  const hasSpaceBelow = viewPort.height - referenceElemRect.bottom >= height;
+  const requireFlip = hasSpaceAbove && !hasSpaceBelow;
+  const shouldAlignToRight = referenceElemRect.right >= width && // enough space on the left
+  viewPort.width - referenceElemRect.left < width; // not enough space on the right
+
+  const shouldAlignToLeft = referenceElemRect.right - width < referenceElemRect.left;
+  return {
+    shouldAlignToLeft,
+    shouldAlignToRight,
+    hasSpaceAbove,
+    hasSpaceBelow,
+    requireFlip
+  };
+}
+
+class Transformer {
+  constructor(pad, boxDirections, transformX, transformY) {
+    this.pad = pad || 0;
+    this.boxDirections = boxDirections || {
+      left: true,
+      right: true
+    };
+
+    this.transformX = transformX || function () {};
+
+    this.transformY = transformY || function () {};
+  }
+
+  transform() {// no-op
+  }
+
+}
+
+class TopTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      top: this.transformY(targetBox.top, targetBox, elementBox) + this.pad
+    };
+  }
+
+}
+
+class BottomTransFormer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      top: this.transformY(targetBox.top, targetBox, elementBox) - elementBox.height - this.pad
+    };
+  }
+
+}
+
+class CenterTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      left: Math.floor(this.transformX(targetBox.left, targetBox, elementBox) - 0.5 * elementBox.width)
+    };
+  }
+
+}
+
+class MiddleTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      top: Math.floor(0.5 * (2 * targetBox.top + targetBox.height - elementBox.height))
+    };
+  }
+
+}
+
+class LeftTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      left: this.transformX(targetBox.left, targetBox, elementBox) + this.pad
+    };
+  }
+
+}
+
+class RightTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    return {
+      left: this.transformX(targetBox.left, targetBox, elementBox) - elementBox.width - this.pad
+    };
+  }
+
+}
+
+class BelowTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    const top = targetBox.top + targetBox.height + this.pad;
+    return elementBox.top < top ? {
+      top
+    } : {};
+  }
+
+}
+
+class BoundingBoxTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    const retBox = {};
+
+    if (this.boxDirections.top && elementBox.top < targetBox.top + this.pad) {
+      retBox.top = targetBox.top + this.pad;
+    }
+
+    if (this.boxDirections.left && elementBox.left < targetBox.left + this.pad) {
+      retBox.left = targetBox.left + this.pad;
+    }
+
+    if (this.boxDirections.right && elementBox.left + elementBox.width > targetBox.left + targetBox.width - this.pad) {
+      retBox.left = targetBox.left + targetBox.width - elementBox.width - this.pad;
+    }
+
+    if (this.boxDirections.bottom && elementBox.top + elementBox.height > targetBox.top + targetBox.height - this.pad) {
+      retBox.top = targetBox.top + targetBox.height - elementBox.height - this.pad;
+    }
+
+    return retBox;
+  }
+
+}
+
+class InverseBoundingBoxTransformer extends Transformer {
+  transform(targetBox, elementBox) {
+    const retBox = {};
+
+    if (this.boxDirections.left && targetBox.left - this.pad < elementBox.left) {
+      retBox.left = targetBox.left - this.pad;
+    }
+
+    if (this.boxDirections.right && elementBox.left + elementBox.width < targetBox.left + targetBox.width + this.pad) {
+      retBox.left = targetBox.width + this.pad - elementBox.width + targetBox.left;
+    }
+
+    if (this.boxDirections.top && targetBox.top < elementBox.top + this.pad) {
+      retBox.top = targetBox.top - this.pad;
+    }
+
+    if (this.boxDirections.bottom && elementBox.top + elementBox.height < targetBox.top + targetBox.height + this.pad) {
+      retBox.top = targetBox.height + this.pad - elementBox.height + targetBox.top;
+    }
+
+    return retBox;
+  }
+
+}
+
+const TransformFunctions = {
+  center(input, targetBox) {
+    return Math.floor(input + 0.5 * targetBox.width);
+  },
+
+  right(input, targetBox) {
+    return input + targetBox.width;
+  },
+
+  left(input) {
+    return input;
+  },
+
+  bottom(input, targetBox) {
+    return input + targetBox.height;
+  }
+
+};
+const Transformers = {
+  top: TopTransformer,
+  bottom: BottomTransFormer,
+  center: CenterTransformer,
+  middle: MiddleTransformer,
+  left: LeftTransformer,
+  right: RightTransformer,
+  below: BelowTransformer,
+  'bounding box': BoundingBoxTransformer,
+  'inverse bounding box': InverseBoundingBoxTransformer,
+  default: Transformer
+};
+function toTransformFunctions(value) {
+  return TransformFunctions[value] || TransformFunctions.left;
+}
+
+class TransformBuilder {
+  type(value) {
+    this._type = value;
+    return this;
+  }
+
+  align(horizontal, vertical) {
+    this._transformX = toTransformFunctions(horizontal);
+    this._transformY = toTransformFunctions(vertical);
+    return this;
+  }
+
+  pad(value) {
+    this._pad = parseInt(value, 10);
+    return this;
+  }
+
+  boxDirections(value) {
+    this._boxDirections = value;
+    return this;
+  }
+
+  build() {
+    const AConstructor = Transformers[this._type] ? Transformers[this._type] : Transformers[Direction.Default];
+    return new AConstructor(this._pad || 0, this._boxDirections || {}, this._transformX || toTransformFunctions(Direction.left), this._transformY || toTransformFunctions(Direction.left));
+  }
+
+}
+
+class Constraint {
+  constructor(type, config) {
+    const {
+      target,
+      element,
+      pad,
+      boxDirections
+    } = config;
+    const {
+      horizontal,
+      vertical
+    } = config.targetAlign;
+    this._element = element;
+    this._targetElement = target;
+    this.destroyed = false;
+    this._transformer = new TransformBuilder().type(type).align(horizontal, vertical).pad(pad).boxDirections(boxDirections).build();
+  }
+
+  detach() {
+    this._disabled = true;
+  }
+
+  attach() {
+    this._disabled = false;
+  }
+
+  computeDisplacement() {
+    if (!this._disabled) {
+      this._targetElement.refresh();
+
+      this._element.refresh();
+
+      this._pendingBox = this._transformer.transform(this._targetElement, this._element);
+    }
+
+    return this;
+  }
+
+  computePosition() {
+    const el = this._element;
+
+    if (!this._disabled) {
+      Object.keys(this._pendingBox).forEach(key => {
+        el.setDirection(key, this._pendingBox[key]);
+      });
+    }
+
+    return this;
+  }
+
+  destroy() {
+    this._element.release();
+
+    this._targetElement.release();
+
+    this._disabled = true;
+    this.destroyed = true;
+  }
+
+}
+
+class ElementProxy {
+  constructor(el, id) {
+    this.id = id;
+    this.width = 0;
+    this.height = 0;
+    this.left = 0;
+    this.top = 0;
+    this.right = 0;
+    this.bottom = 0;
+    this._dirty = false;
+    this._node = null;
+    this._releaseCb = null;
+
+    if (!el) {
+      throw new Error('Element missing');
+    } // W-3262919
+    // for some reason I cannot figure out sometimes the
+    // window, which clearly a window object, is not the window object
+    // this will correct that. It might be related to locker
+
+
+    if (WindowManager.isWindow(el)) {
+      el = WindowManager.window;
+    }
+
+    this._node = el;
+    this.setupObserver();
+    this.refresh();
+  }
+
+  setupObserver() {
+    // this check is because phantomjs does not support
+    // mutation observers. The consqeuence here
+    // is that any browser without mutation observers will
+    // fail to update dimensions if they changwe after the proxy
+    // is created and the proxy is not not refreshed
+    if (WindowManager.MutationObserver && !this._node.isObserved) {
+      // Use mutation observers to invalidate cache. It's magic!
+      this._observer = new WindowManager.MutationObserver(this.refresh.bind(this)); // do not observe the window
+
+      if (!WindowManager.isWindow(this._node)) {
+        this._observer.observe(this._node, {
+          attributes: true,
+          childList: true,
+          characterData: true,
+          subtree: true
+        });
+
+        this._node.isObserved = true;
+      }
+    }
+  }
+
+  setReleaseCallback(cb, scope) {
+    const scopeObj = scope || this;
+    this._releaseCb = cb.bind(scopeObj);
+  }
+
+  checkNodeIsInDom() {
+    // if underlying DOM node is gone,
+    // this proxy should be released
+    if (!isInDom(this._node)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  refresh() {
+    const w = WindowManager.window;
+
+    if (!this.isDirty()) {
+      if (!this.checkNodeIsInDom()) {
+        return this.release();
+      }
+
+      let box, x, scrollTop, scrollLeft;
+
+      if (typeof w.pageYOffset !== 'undefined') {
+        scrollTop = w.pageYOffset;
+        scrollLeft = w.pageXOffset;
+      } else {
+        scrollTop = w.scrollY;
+        scrollLeft = w.scrollX;
+      }
+
+      if (!WindowManager.isWindow(this._node)) {
+        // force paint
+        // eslint-disable-next-line no-unused-vars
+        const offsetHeight = this._node.offsetHeight;
+        box = this._node.getBoundingClientRect(); // not using integers causes weird rounding errors
+        // eslint-disable-next-line guard-for-in
+
+        for (x in box) {
+          this[x] = Math.floor(box[x]);
+        }
+
+        this.top = Math.floor(this.top + scrollTop);
+        this.bottom = Math.floor(this.top + box.height);
+        this.left = Math.floor(this.left + scrollLeft);
+        this.right = Math.floor(this.left + box.width);
+      } else {
+        box = {};
+        this.width = WindowManager.documentElement.clientWidth;
+        this.height = WindowManager.documentElement.clientHeight;
+        this.left = scrollLeft;
+        this.top = scrollTop;
+        this.right = WindowManager.documentElement.clientWidth + scrollLeft;
+        this.bottom = WindowManager.documentElement.clientHeight;
+      }
+
+      this._dirty = false;
+    }
+
+    return this._dirty;
+  }
+
+  getNode() {
+    return this._node;
+  }
+
+  isDirty() {
+    return this._dirty;
+  }
+
+  bake() {
+    const w = WindowManager.window;
+
+    const absPos = this._node.getBoundingClientRect();
+
+    const style = w.getComputedStyle(this._node);
+    let originalLeft, originalTop;
+    let scrollTop, scrollLeft;
+
+    if (typeof w.pageYOffset !== 'undefined') {
+      scrollTop = w.pageYOffset;
+      scrollLeft = w.pageXOffset;
+    } else {
+      scrollTop = w.scrollY;
+      scrollLeft = w.scrollX;
+    }
+
+    if (style.left.match(/auto|fixed/)) {
+      originalLeft = '0';
+    } else {
+      originalLeft = style.left;
+    }
+
+    if (style.top.match(/auto|fixed/)) {
+      originalTop = '0';
+    } else {
+      originalTop = style.top;
+    }
+
+    originalLeft = parseInt(originalLeft.replace('px', ''), 10);
+    originalTop = parseInt(originalTop.replace('px', ''), 10);
+    const leftDif = Math.round(this.left - (absPos.left + scrollLeft));
+    const topDif = this.top - (absPos.top + scrollTop);
+    this._node.style.left = originalLeft + leftDif + 'px';
+    this._node.style.top = originalTop + topDif + 'px';
+    this._dirty = false;
+  }
+
+  setDirection(direction, val) {
+    this[direction] = val;
+    this._dirty = true;
+  }
+
+  release() {
+    if (this._releaseCb) {
+      this._releaseCb(this);
+    }
+  }
+
+  querySelectorAll(selector) {
+    return this._node.querySelectorAll(selector);
+  }
+
+}
+
+class ProxyCache {
+  constructor() {
+    this.proxyCache = {};
+  }
+
+  get count() {
+    return Object.keys(this.proxyCache).length;
+  }
+
+  releaseOrphanProxies() {
+    for (const proxy in this.proxyCache) {
+      if (!this.proxyCache[proxy].el.checkNodeIsInDom()) {
+        this.proxyCache[proxy].el.release();
+      }
+    }
+  }
+
+  bakeOff() {
+    for (const proxy in this.proxyCache) {
+      if (this.proxyCache[proxy].el.isDirty()) {
+        this.proxyCache[proxy].el.bake();
+      }
+    }
+  }
+
+  getReferenceCount(proxy) {
+    const id = proxy.id;
+
+    if (!id || !this.proxyCache[id]) {
+      return 0;
+    }
+
+    return this.proxyCache[id].refCount;
+  }
+
+  release(proxy) {
+    const proxyInstance = this.proxyCache[proxy.id];
+
+    if (proxyInstance) {
+      --proxyInstance.refCount;
+    }
+
+    if (proxyInstance && proxyInstance.refCount <= 0) {
+      delete this.proxyCache[proxy.id];
+    }
+  }
+
+  reset() {
+    this.proxyCache = {};
+  }
+
+  create(element) {
+    let key = 'window';
+
+    if (!WindowManager.isWindow(element)) {
+      // 1 - Node.ELEMENT_NODE, 11 - Node.DOCUMENT_FRAGMENT_NODE
+      assert(element && element.positionId && element.nodeType && (element.nodeType !== 1 || element.nodeType !== 11), 'Element Proxy requires an element and has property positionId');
+      key = element.positionId;
+    }
+
+    if (this.proxyCache[key]) {
+      this.proxyCache[key].refCount++;
+      return this.proxyCache[key].el;
+    }
+
+    const newProxy = new ElementProxy(element, key);
+    newProxy.setReleaseCallback(release, newProxy);
+    this.proxyCache[key] = {
+      el: newProxy,
+      refCount: 1
+    }; // run GC
+
+    timeout(0).then(() => {
+      this.releaseOrphanProxies();
+    });
+    return this.proxyCache[key].el;
+  }
+
+}
+
+const elementProxyCache = new ProxyCache();
+function bakeOff() {
+  elementProxyCache.bakeOff();
+}
+function release(proxy) {
+  return elementProxyCache.release(proxy);
+}
+function createProxy(element) {
+  return elementProxyCache.create(element);
+}
+
+class RepositionQueue {
+  constructor() {
+    this.callbacks = [];
+    this.repositionScheduled = false;
+    this._constraints = [];
+    this.timeoutId = 0;
+    this.lastIndex = 7000;
+    this.eventsBound = false;
+  }
+
+  get nextIndex() {
+    return this.lastIndex++;
+  }
+
+  get constraints() {
+    return this._constraints;
+  }
+
+  set constraints(value) {
+    this._constraints = this._constraints.concat(value);
+  }
+
+  dispatchRepositionCallbacks() {
+    while (this.callbacks.length > 0) {
+      this.callbacks.shift();
+    }
+  }
+
+  add(callback) {
+    if (typeof callback === 'function') {
+      this.callbacks.push(callback);
+      return true;
+    }
+
+    return false;
+  }
+
+  scheduleReposition(callback) {
+    if (this.timeoutId === 0) {
+      // eslint-disable-next-line lwc/no-set-timeout
+      this.timeoutId = setTimeout(() => {
+        this.reposition(callback);
+      }, 10);
+    }
+  }
+
+  reposition(callback) {
+    // all the callbacks will be called
+    if (typeof callback === 'function') {
+      this.callbacks.push(callback);
+    } // this is for throttling
+
+
+    clearTimeout(this.timeoutId);
+    this.timeoutId = 0; // this semaphore is to make sure
+    // if reposition is called twice within one frame
+    // we only run this once
+
+    if (!this.repositionScheduled) {
+      requestAnimationFrame(() => {
+        this.repositionScheduled = false; // this must be executed in order or constraints
+        // will behave oddly
+
+        this._constraints = this._constraints.filter(constraint => {
+          if (!constraint.destroyed) {
+            constraint.computeDisplacement().computePosition();
+            return true;
+          }
+
+          return false;
+        });
+        bakeOff();
+        this.dispatchRepositionCallbacks();
+      });
+      this.repositionScheduled = true;
+    }
+  }
+
+  get repositioning() {
+    if (!this._reposition) {
+      this._reposition = this.scheduleReposition.bind(this);
+    }
+
+    return this._reposition;
+  }
+
+  bindEvents() {
+    if (!this.eventsBound) {
+      window.addEventListener('resize', this.repositioning);
+      window.addEventListener('scroll', this.repositioning);
+      this.eventsBound = true;
+    }
+  }
+
+  detachEvents() {
+    window.removeEventListener('resize', this.repositioning);
+    window.removeEventListener('scroll', this.repositioning);
+    this.eventsBound = false;
+  }
+
+}
+
+const positionQueue = new RepositionQueue();
+function scheduleReposition(callback) {
+  positionQueue.scheduleReposition(callback);
+}
+function bindEvents() {
+  positionQueue.bindEvents();
+}
+function addConstraints(list) {
+  positionQueue.constraints = list;
+}
+function reposition(callback) {
+  positionQueue.reposition(callback);
+}
+function nextIndex() {
+  return positionQueue.nextIndex;
+}
+
+class Relationship {
+  constructor(config, constraintList, scrollableParent) {
+    this.config = config;
+    this.constraintList = constraintList;
+    this.scrollableParent = scrollableParent;
+  }
+
+  disable() {
+    this.constraintList.forEach(constraintToDisable => {
+      constraintToDisable.detach();
+    });
+  }
+
+  enable() {
+    this.constraintList.forEach(constraintToEnable => {
+      constraintToEnable.attach();
+    });
+  }
+
+  destroy() {
+    if (this.config.removeListeners) {
+      this.config.removeListeners();
+      this.config.removeListeners = undefined;
+    }
+
+    while (this.constraintList.length > 0) {
+      this.constraintList.pop().destroy();
+    } // Clean up node appended to body of dom
+
+
+    if (this.config.appendToBody && this.config.element) {
+      const nodeToRemove = document.querySelector(this.config.element.positionId);
+
+      if (nodeToRemove) {
+        nodeToRemove.parentNode.removeChild(nodeToRemove);
+      }
+    }
+  }
+
+  reposition() {
+    reposition();
+  }
+
+}
+
+function setupObserver(config, scrollableParent) {
+  let proxyWheelEvents = true;
+
+  if (WindowManager.MutationObserver && !config.element.isObserved) {
+    // phantomjs :(
+    let scrollableChildren = queryScrollableChildren(config.element);
+    const observer = new WindowManager.MutationObserver(() => {
+      scrollableChildren = queryScrollableChildren(config.element);
+      proxyWheelEvents = !containsScrollingElement(scrollableChildren);
+    });
+
+    if (containsScrollingElement(scrollableChildren)) {
+      proxyWheelEvents = false;
+    }
+
+    observer.observe(config.element, {
+      attributes: true,
+      subtree: true,
+      childList: true
+    });
+    config.element.isObserved = true;
+  }
+
+  if (scrollableParent) {
+    const scrollRemovalFunction = attachPassiveEvent(scrollableParent, 'scroll', scheduleReposition); // if the target element is inside a
+    // scrollable element, we need to make sure
+    // scroll events move that element,
+    // not the parent, also we need to reposition on scroll
+
+    const wheelRemovalFunction = attachPassiveEvent(config.element, 'wheel', e => {
+      if (proxyWheelEvents && scrollableParent && typeof scrollableParent.scrollTop !== 'undefined') {
+        scrollableParent.scrollTop += e.deltaY;
+      }
+    });
+
+    config.removeListeners = () => {
+      scrollRemovalFunction();
+      wheelRemovalFunction();
+    };
+  }
+}
+
+function validateConfig(config) {
+  assert(config.element && isDomNode(config.element), 'Element is undefined or missing, or not a Dom Node');
+  assert(config.target && (WindowManager.isWindow(config.target) || isDomNode(config.target)), 'Target is undefined or missing');
+}
+
+function createRelationship(config) {
+  bindEvents();
+  config.element = normalizePosition(config.element, nextIndex(), config.target, config.alignWidth);
+
+  if (config.alignWidth && config.element.style.position === 'fixed') {
+    config.element.style.width = config.target.getBoundingClientRect().width + 'px';
+  }
+
+  const constraintList = [];
+  const scrollableParent = getScrollableParent(getPositionTarget(config.target), WindowManager.window); // This observer and the test for scrolling children
+  // is so that if a panel contains a scroll we do not
+  // proxy the events to the "parent"  (actually the target's parent)
+
+  setupObserver(config, scrollableParent);
+
+  if (config.appendToBody) {
+    document.body.appendChild(config.element);
+  }
+
+  config.element = createProxy(config.element);
+  config.target = createProxy(config.target); // Add vertical constraint.
+
+  const verticalConfig = Object.assign({}, config);
+
+  if (verticalConfig.padTop !== undefined) {
+    verticalConfig.pad = verticalConfig.padTop;
+  } // Add horizontal constraint.
+
+
+  constraintList.push(new Constraint(mapToHorizontal(config.align.horizontal), config));
+  constraintList.push(new Constraint(mapToVertical(config.align.vertical), verticalConfig));
+
+  if (config.scrollableParentBound && scrollableParent) {
+    const parent = normalizeElement(scrollableParent);
+    const boxConfig = {
+      element: config.element,
+      enabled: config.enabled,
+      target: createProxy(parent),
+      align: {},
+      targetAlign: {},
+      pad: 3,
+      boxDirections: {
+        top: true,
+        bottom: true,
+        left: true,
+        right: true
+      }
+    };
+    constraintList.push(new Constraint('bounding box', boxConfig));
+  }
+
+  addConstraints(constraintList);
+  reposition();
+  return new Relationship(config, constraintList, scrollableParent);
+}
+
+function normalizeConfig(config) {
+  config.align = config.align || {};
+  config.targetAlign = config.targetAlign || {};
+  const {
+    shouldAlignToLeft,
+    shouldAlignToRight,
+    hasSpaceAbove,
+    hasSpaceBelow,
+    requireFlip
+  } = checkFlipPossibility(config.element, config.target);
+  const vFlip = config.autoFlip ? requireFlip : false;
+  const {
+    align,
+    targetAlign
+  } = config;
+  let hFlip = false;
+
+  if (align.horizontal === Direction.Left) {
+    hFlip = config.autoFlip ? shouldAlignToRight : false;
+  } else if (align.horizontal === Direction.Right) {
+    hFlip = config.autoFlip ? shouldAlignToLeft : false;
+  } // When inside modal, element may expand out of the viewport and be cut off.
+  // So if inside modal, and don't have enough space above or below, will add bounding box rule.
+
+
+  if (isInsideModal(config.element) && !hasSpaceAbove && !hasSpaceBelow) {
+    config.scrollableParentBound = true;
+  }
+
+  return {
+    target: config.target,
+    element: config.element,
+    align: {
+      horizontal: hFlip ? flipDirection(align.horizontal) : normalizeDirection(align.horizontal, Direction.Left),
+      vertical: vFlip ? flipDirection(align.vertical) : normalizeDirection(align.vertical, Direction.Top)
+    },
+    targetAlign: {
+      horizontal: hFlip ? flipDirection(targetAlign.horizontal) : normalizeDirection(targetAlign.horizontal, Direction.Left),
+      vertical: vFlip ? flipDirection(targetAlign.vertical) : normalizeDirection(targetAlign.vertical, Direction.Bottom)
+    },
+    alignWidth: config.alignWidth,
+    scrollableParentBound: config.scrollableParentBound
+  };
+}
+
+function getElement(root, target) {
+  if (target && typeof target === 'string') {
+    return root.querySelector(target);
+  }
+
+  return target;
+}
+
+function startPositioning(root, config) {
+  assert(root, 'Root is undefined or missing');
+  assert(config, 'Config is undefined or missing');
+  const node = normalizeElement(root);
+  const target = getElement(node, config.target);
+  const element = getElement(node, config.element); // when target/element is selector, there is chance, dom isn't present anymore.
+
+  if (!target || !element) {
+    return null;
+  }
+
+  config.target = normalizeElement(target);
+  config.element = normalizeElement(element);
+  validateConfig(config);
+  return createRelationship(normalizeConfig(config));
+}
+function stopPositioning(relationship) {
+  if (relationship) {
+    relationship.destroy();
+  }
+}
+class AutoPosition {
+  constructor(root) {
+    this._autoPositionUpdater = null;
+    this._root = root;
+  }
+
+  start(config) {
+    return requestAnimationFrameAsPromise().then(() => {
+      if (!this._autoPositionUpdater) {
+        this._autoPositionUpdater = startPositioning(this._root, config);
+      } else {
+        this._autoPositionUpdater.reposition();
+      }
+
+      return this._autoPositionUpdater;
+    });
+  }
+
+  stop() {
+    if (this._autoPositionUpdater) {
+      stopPositioning(this._autoPositionUpdater);
+      this._autoPositionUpdater = null;
+    }
+  }
+
+}
+
+var labelBadInput = 'Enter a valid value.';
+
+var labelPatternMismatch = 'Your entry does not match the allowed pattern.';
+
+var labelRangeOverflow = 'The number is too high.';
+
+var labelRangeUnderflow = 'The number is too low.';
+
+var labelStepMismatch = 'Your entry isn\'t a valid increment.';
+
+var labelTooLong = 'Your entry is too long.';
+
+var labelTooShort = 'Your entry is too short.';
+
+var labelTypeMismatch = 'You have entered an invalid format.';
+
+var labelValueMissing = 'Complete this field.';
+
+let idCounter = 0;
+function generateUniqueId(prefix = 'input') {
+  idCounter++;
+  return `${prefix}-${idCounter}`;
+}
+
+/**
+ Represents an object which keeps track of a user's interacting state.
+ @constructor InteractingState
+ @param {Object} options - The options object.
+ @param {Object} [options.duration=2000] - The number of milliseconds of idle time to wait before exiting the interacting state.
+ @param {Object} [options.debounceInteraction=false] - Whether to debounce interaction to ignore consecutive leave-enter interactions.
+ **/
+
+class InteractingState {
+  constructor(options) {
+    const duration = options && options.duration >= 0 ? options.duration : 2000;
+    this.eventemitter = new EventEmitter();
+    this._interacting = false;
+    this._debouncedLeave = debounce(this.leave.bind(this), duration);
+    this._debounceInteraction = options && options.debounceInteraction;
+    this._interactedRecently = false;
+
+    if (this._debounceInteraction) {
+      // debounce leave until a short time later
+      this._debouncedEmitLeave = debounce(() => {
+        if (!this._interacting) {
+          this._interactedRecently = false;
+          this.eventemitter.emit('leave');
+        }
+      }, 200); // debounce enter until left
+
+      this._debouncedEmitEnter = () => {
+        if (!this._interactedRecently) {
+          this._interactedRecently = true;
+          this.eventemitter.emit('enter');
+        }
+      };
+    }
+  }
+  /**
+   Checks whether or not we are in the interacting state.
+   @method InteractingState#isInteracting
+   @return {Boolean} - Whether or not we are interacting.
+   **/
+
+
+  isInteracting() {
+    return this._interacting;
+  }
+  /**
+   Enters the interacting state.
+   @method InteractingState#enter
+   @returns {void}
+   **/
+
+
+  enter() {
+    if (!this._interacting) {
+      this._interacting = true;
+
+      if (this._debounceInteraction) {
+        this._debouncedEmitEnter();
+      } else {
+        this.eventemitter.emit('enter');
+      }
+    }
+  }
+  /**
+   Registers a handler to execute when we enter the interacting state.
+   @method InteractingState#onenter
+   @param {Function} handler - The callback function.
+   **/
+
+
+  onenter(handler) {
+    this.eventemitter.on('enter', handler);
+  }
+  /**
+   Leaves the interacting state.
+   @method InteractingState#leave
+   @returns {void}
+   **/
+
+
+  leave() {
+    if (this._interacting) {
+      this._interacting = false;
+
+      if (this._debounceInteraction) {
+        this._debouncedEmitLeave();
+      } else {
+        this.eventemitter.emit('leave');
+      }
+    }
+  }
+  /**
+   Registers a handler to execute when we leave the interacting state.
+   @method InteractingState#onleave
+   @param {Function} handler - The callback function.
+   **/
+
+
+  onleave(handler) {
+    this.eventemitter.on('leave', handler);
+  }
+  /**
+   Signals the start of the transition into the interacting state and
+   schedules a transition out of the interacting state after an idle
+   duration. Calling this method multiple times will reset the timer.
+   @method InteractingState#interacting
+   @returns {void}
+   **/
+
+
+  interacting() {
+    this.enter();
+
+    this._debouncedLeave();
+  }
+
+}
+/**
+ Creates a debounced function that delays invoking `func` until after
+ `delay` milliseconds have elapsed since the last time the debounced
+ function was invoked.
+ @function debounce
+ @param {Function} func - The function to debounce
+ @param {Number} delay - The number of milliseconds to delay
+ @param {Object} options - The options object
+ @param {Boolean} options.leading - Specify invoking on the leading edge of the timeout
+ @return {Function} - debounced function
+ **/
+
+function debounce(func, delay, options) {
+  const _options = options || {};
+
+  let invokeLeading = _options.leading;
+  let timer;
+  return function debounced() {
+    const args = Array.prototype.slice.apply(arguments);
+
+    if (invokeLeading) {
+      func.apply(this, args);
+      invokeLeading = false;
+    }
+
+    clearTimeout(timer); // eslint-disable-next-line lwc/no-set-timeout
+
+    timer = setTimeout(function () {
+      func.apply(this, args);
+      invokeLeading = _options.leading; // reset for next debounce sequence
+    }, delay);
+  };
+}
+
+const constraintsSortedByPriority = ['customError', 'badInput', 'patternMismatch', 'rangeOverflow', 'rangeUnderflow', 'stepMismatch', 'tooLong', 'tooShort', 'typeMismatch', 'valueMissing'];
+const defaultLabels = {
+  badInput: labelBadInput,
+  customError: labelBadInput,
+  patternMismatch: labelPatternMismatch,
+  rangeOverflow: labelRangeOverflow,
+  rangeUnderflow: labelRangeUnderflow,
+  stepMismatch: labelStepMismatch,
+  tooLong: labelTooLong,
+  tooShort: labelTooShort,
+  typeMismatch: labelTypeMismatch,
+  valueMissing: labelValueMissing
+};
+
+function resolveBestMatch(validity) {
+  let validityState;
+
+  if (validity && validity.valid === false) {
+    validityState = 'badInput';
+    constraintsSortedByPriority.some(stateName => {
+      if (validity[stateName] === true) {
+        validityState = stateName;
+        return true;
+      }
+
+      return false;
+    });
+  }
+
+  return validityState;
+}
+
+function computeConstraint(valueProvider, constraint) {
+  const provider = valueProvider[constraint];
+
+  if (typeof provider === 'function') {
+    return provider();
+  }
+
+  if (typeof provider === 'boolean') {
+    return provider;
+  }
+
+  return false;
+} // We're doing the below to avoid exposing the constraintsProvider in the ValidityState
+
+
+function newValidityState(constraintsProvider) {
+  class ValidityState {
+    get valueMissing() {
+      return computeConstraint(constraintsProvider, 'valueMissing');
+    }
+
+    get typeMismatch() {
+      return computeConstraint(constraintsProvider, 'typeMismatch');
+    }
+
+    get patternMismatch() {
+      return computeConstraint(constraintsProvider, 'patternMismatch');
+    }
+
+    get tooLong() {
+      return computeConstraint(constraintsProvider, 'tooLong');
+    }
+
+    get tooShort() {
+      return computeConstraint(constraintsProvider, 'tooShort');
+    }
+
+    get rangeUnderflow() {
+      return computeConstraint(constraintsProvider, 'rangeUnderflow');
+    }
+
+    get rangeOverflow() {
+      return computeConstraint(constraintsProvider, 'rangeOverflow');
+    }
+
+    get stepMismatch() {
+      return computeConstraint(constraintsProvider, 'stepMismatch');
+    }
+
+    get customError() {
+      return computeConstraint(constraintsProvider, 'customError');
+    }
+
+    get badInput() {
+      return computeConstraint(constraintsProvider, 'badInput');
+    }
+
+    get valid() {
+      return !(this.valueMissing || this.typeMismatch || this.patternMismatch || this.tooLong || this.tooShort || this.rangeUnderflow || this.rangeOverflow || this.stepMismatch || this.customError || this.badInput);
+    }
+
+  }
+
+  return new ValidityState();
+}
+
+function buildSyntheticValidity(constraintProvider) {
+  return Object.freeze(newValidityState(constraintProvider));
+}
+function getErrorMessage(validity, labelMap) {
+  const key = resolveBestMatch(validity);
+
+  if (key) {
+    return labelMap[key] ? labelMap[key] : defaultLabels[key];
+  }
+
+  return '';
+}
+class FieldConstraintApi {
+  constructor(inputComponentProvider, constraintProviders) {
+    assert(typeof inputComponentProvider === 'function');
+    this._inputComponentProvider = inputComponentProvider;
+    this._constraintsProvider = Object.assign({}, constraintProviders);
+
+    if (!this._constraintsProvider.customError) {
+      this._constraintsProvider.customError = () => typeof this._customValidityMessage === 'string' && this._customValidityMessage !== '';
+    }
+  }
+
+  get validity() {
+    if (!this._constraint) {
+      this._constraint = buildSyntheticValidity(this._constraintsProvider);
+    }
+
+    return this._constraint;
+  }
+
+  checkValidity() {
+    const isValid = this.validity.valid;
+
+    if (!isValid) {
+      if (this.inputComponent) {
+        this.inputComponent.dispatchEvent(new CustomEvent('invalid', {
+          cancellable: true
+        }));
+      }
+    }
+
+    return isValid;
+  }
+
+  reportValidity(callback) {
+    const valid = this.checkValidity();
+    this.inputComponent.classList.toggle('slds-has-error', !valid);
+
+    if (callback) {
+      callback(this.validationMessage);
+    }
+
+    return valid;
+  }
+
+  setCustomValidity(message) {
+    this._customValidityMessage = message;
+  }
+
+  get validationMessage() {
+    return getErrorMessage(this.validity, {
+      customError: this._customValidityMessage,
+      badInput: this.inputComponent.messageWhenBadInput,
+      patternMismatch: this.inputComponent.messageWhenPatternMismatch,
+      rangeOverflow: this.inputComponent.messageWhenRangeOverflow,
+      rangeUnderflow: this.inputComponent.messageWhenRangeUnderflow,
+      stepMismatch: this.inputComponent.messageWhenStepMismatch,
+      tooShort: this.inputComponent.messageWhenTooShort,
+      tooLong: this.inputComponent.messageWhenTooLong,
+      typeMismatch: this.inputComponent.messageWhenTypeMismatch,
+      valueMissing: this.inputComponent.messageWhenValueMissing
+    });
+  }
+
+  get inputComponent() {
+    if (!this._inputComponentElement) {
+      this._inputComponentElement = this._inputComponentProvider();
+    }
+
+    return this._inputComponentElement;
+  }
+
+}
+const VARIANT = {
+  STANDARD: 'standard',
+  LABEL_HIDDEN: 'label-hidden',
+  LABEL_STACKED: 'label-stacked'
+};
+/**
+A variant normalization utility for attributes.
+@param {Any} value - The value to normalize.
+@return {Boolean} - The normalized value.
+**/
+
+function normalizeVariant$1(value) {
+  return normalizeString(value, {
+    fallbackValue: VARIANT.STANDARD,
+    validValues: [VARIANT.STANDARD, VARIANT.LABEL_HIDDEN, VARIANT.LABEL_STACKED]
+  });
+}
+
+function isEmptyString(s) {
+  return s === undefined || s === null || typeof s === 'string' && s.trim() === '';
+}
+
+const style$6 = undefined;
+
+function tmpl$6($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    b: api_bind,
+    h: api_element,
+    d: api_dynamic,
+    k: api_key,
+    i: api_iterator,
+    f: api_flatten
+  } = $api;
+
+  const {
+    _m0,
+    _m1,
+    _m2,
+    _m3,
+    _m4,
+    _m5,
+    _m6,
+    _m7,
+    _m8,
+    _m9,
+    _m10,
+    _m11,
+    _m12,
+    _m13,
+    _m14,
+    _m15
+  } = $ctx;
+  return [api_element("div", {
+    className: $cmp.computedDropdownTriggerClass,
+    attrs: {
+      "role": "combobox",
+      "aria-expanded": $cmp.computedAriaExpanded,
+      "aria-haspopup": "listbox"
+    },
+    key: 28,
+    on: {
+      "click": _m15 || ($ctx._m15 = api_bind($cmp.handleTriggerClick))
+    }
+  }, [api_element("div", {
+    className: $cmp.computedFormElementClass,
+    attrs: {
+      "role": "none"
+    },
+    key: 13
+  }, [$cmp.hasInputPill ? api_custom_element("lightning-icon", LightningIcon, {
+    classMap: {
+      "slds-icon_container": true,
+      "slds-combobox__input-entity-icon": true
+    },
+    props: {
+      "iconName": $cmp.inputPill.iconName,
+      "alternativeText": $cmp.inputPill.iconAlternativeText,
+      "size": "x-small"
+    },
+    key: 1
+  }, []) : null, api_element("input", {
+    className: $cmp.computedInputClass,
+    attrs: {
+      "id": $cmp.inputId,
+      "type": "text",
+      "role": "textbox",
+      "autocomplete": "off",
+      "name": $cmp.name,
+      "placeholder": $cmp.computedPlaceholder,
+      "maxlength": $cmp.inputMaxlength,
+      "aria-autocomplete": $cmp.computedAriaAutocomplete,
+      "aria-activedescendant": $cmp._highlightedOptionElementId,
+      "aria-controls": $cmp.computedInputControls,
+      "aria-label": $cmp.inputLabel,
+      "aria-labelledby": $cmp.inputLabelledBy,
+      "aria-describedby": $cmp.inputDescribedBy
+    },
+    props: {
+      "value": $cmp.computedInputValue,
+      "disabled": $cmp.disabled,
+      "readOnly": $cmp._inputReadOnly
+    },
+    key: 2,
+    on: {
+      "focus": _m0 || ($ctx._m0 = api_bind($cmp.handleFocus)),
+      "select": _m1 || ($ctx._m1 = api_bind($cmp.handleInputSelect)),
+      "change": _m2 || ($ctx._m2 = api_bind($cmp.handleTextChange)),
+      "input": _m3 || ($ctx._m3 = api_bind($cmp.handleInput)),
+      "keydown": _m4 || ($ctx._m4 = api_bind($cmp.handleInputKeyDown)),
+      "blur": _m5 || ($ctx._m5 = api_bind($cmp.handleBlur))
+    }
+  }, []), $cmp.hasInputPill ? api_element("div", {
+    classMap: {
+      "slds-input__icon-group": true,
+      "slds-input__icon-group_right": true
+    },
+    key: 6
+  }, [api_element("button", {
+    classMap: {
+      "slds-button": true,
+      "slds-button_icon": true,
+      "slds-input__icon": true,
+      "slds-input__icon_right": true
+    },
+    attrs: {
+      "title": $cmp.i18n.pillCloseButtonAlternativeText
+    },
+    key: 5,
+    on: {
+      "click": _m6 || ($ctx._m6 = api_bind($cmp.handlePillRemove))
+    }
+  }, [api_custom_element("lightning-primitive-icon", LightningPrimitiveIcon, {
+    props: {
+      "iconName": "utility:close",
+      "variant": "bare",
+      "svgClass": "slds-button__icon"
+    },
+    key: 3
+  }, []), api_element("span", {
+    classMap: {
+      "slds-assistive-text": true
+    },
+    key: 4
+  }, [api_dynamic($cmp.i18n.pillCloseButtonAlternativeText)])])]) : null, !$cmp.hasInputPill ? api_element("div", {
+    classMap: {
+      "slds-input__icon-group": true,
+      "slds-input__icon-group_right": true
+    },
+    key: 12
+  }, [$cmp.showInputActivityIndicator ? api_element("div", {
+    classMap: {
+      "slds-spinner": true,
+      "slds-spinner_brand": true,
+      "slds-spinner_x-small": true,
+      "slds-input__spinner": true
+    },
+    attrs: {
+      "role": "status"
+    },
+    key: 10
+  }, [api_element("span", {
+    classMap: {
+      "slds-assistive-text": true
+    },
+    key: 7
+  }, [api_dynamic($cmp.i18n.loadingText)]), api_element("div", {
+    classMap: {
+      "slds-spinner__dot-a": true
+    },
+    key: 8
+  }, []), api_element("div", {
+    classMap: {
+      "slds-spinner__dot-b": true
+    },
+    key: 9
+  }, [])]) : null, $cmp.inputIconName ? api_custom_element("lightning-icon", LightningIcon, {
+    classMap: {
+      "slds-input__icon": true,
+      "slds-input__icon_right": true
+    },
+    props: {
+      "alternativeText": $cmp.inputIconAlternativeText,
+      "iconName": $cmp.inputIconName,
+      "size": $cmp.inputIconSize
+    },
+    key: 11
+  }, []) : null]) : null]), api_element("div", {
+    className: $cmp.computedDropdownClass,
+    attrs: {
+      "id": $cmp.computedUniqueDropdownElementId,
+      "role": "listbox"
+    },
+    key: 27,
+    on: {
+      "scroll": _m11 || ($ctx._m11 = api_bind($cmp.handleListboxScroll)),
+      "mousedown": _m12 || ($ctx._m12 = api_bind($cmp.handleDropdownMouseDown)),
+      "mouseup": _m13 || ($ctx._m13 = api_bind($cmp.handleDropdownMouseUp)),
+      "mouseleave": _m14 || ($ctx._m14 = api_bind($cmp.handleDropdownMouseLeave))
+    }
+  }, $cmp._hasDropdownOpened ? api_flatten([api_iterator($cmp._items, function (item) {
+    return [!item.items ? api_custom_element("lightning-base-combobox-item", LightningBaseComboboxItem, {
+      classMap: {
+        "slds-media": true,
+        "slds-listbox__option": true,
+        "slds-media_center": true
+      },
+      attrs: {
+        "data-value": item.value
+      },
+      props: {
+        "role": "option",
+        "item": item,
+        "id": item.id
+      },
+      key: api_key(14, item.value),
+      on: {
+        "click": _m7 || ($ctx._m7 = api_bind($cmp.handleOptionClick)),
+        "mouseenter": _m8 || ($ctx._m8 = api_bind($cmp.handleOptionMouseEnter))
+      }
+    }, []) : null, item.items ? api_element("ul", {
+      attrs: {
+        "role": "group",
+        "aria-label": item.label
+      },
+      key: api_key(20, item.label)
+    }, api_flatten([item.label ? api_element("li", {
+      classMap: {
+        "slds-listbox__item": true
+      },
+      attrs: {
+        "role": "presentation"
+      },
+      key: 17
+    }, [api_element("div", {
+      classMap: {
+        "slds-media": true,
+        "slds-listbox__option": true,
+        "slds-listbox__option_plain": true,
+        "slds-media_small": true
+      },
+      attrs: {
+        "role": "presentation"
+      },
+      key: 16
+    }, [api_element("h3", {
+      classMap: {
+        "slds-text-title_caps": true
+      },
+      attrs: {
+        "role": "presentation",
+        "title": item.label
+      },
+      key: 15
+    }, [api_dynamic(item.label)])])]) : null, api_iterator(item.items, function (groupItem) {
+      return api_element("li", {
+        classMap: {
+          "slds-listbox__item": true
+        },
+        attrs: {
+          "role": "presentation"
+        },
+        key: api_key(19, groupItem.value)
+      }, [api_custom_element("lightning-base-combobox-item", LightningBaseComboboxItem, {
+        classMap: {
+          "slds-media": true,
+          "slds-listbox__option": true,
+          "slds-media_center": true
+        },
+        attrs: {
+          "data-value": groupItem.value
+        },
+        props: {
+          "role": "option",
+          "item": groupItem,
+          "id": groupItem.id
+        },
+        key: 18,
+        on: {
+          "click": _m9 || ($ctx._m9 = api_bind($cmp.handleOptionClick)),
+          "mouseenter": _m10 || ($ctx._m10 = api_bind($cmp.handleOptionMouseEnter))
+        }
+      }, [])]);
+    })])) : null];
+  }), $cmp.showDropdownActivityIndicator ? api_element("div", {
+    classMap: {
+      "slds-listbox__item": true
+    },
+    attrs: {
+      "role": "presentation"
+    },
+    key: 26
+  }, [api_element("div", {
+    classMap: {
+      "slds-align_absolute-center": true,
+      "slds-p-top_medium": true
+    },
+    key: 25
+  }, [api_element("div", {
+    classMap: {
+      "slds-spinner": true,
+      "slds-spinner_x-small": true,
+      "slds-spinner_inline": true
+    },
+    attrs: {
+      "role": "status"
+    },
+    key: 24
+  }, [api_element("span", {
+    classMap: {
+      "slds-assistive-text": true
+    },
+    key: 21
+  }, [api_dynamic($cmp.i18n.loadingText)]), api_element("div", {
+    classMap: {
+      "slds-spinner__dot-a": true
+    },
+    key: 22
+  }, []), api_element("div", {
+    classMap: {
+      "slds-spinner__dot-b": true
+    },
+    key: 23
+  }, [])])])]) : null]) : [])])];
+}
+
+if (style$6) {
+    tmpl$6.hostToken = 'lightning-base-combobox_base-combobox-host';
+    tmpl$6.shadowToken = 'lightning-base-combobox_base-combobox';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-base-combobox_base-combobox';
+    style$$1.textContent = style$6('lightning-base-combobox_base-combobox');
+    document.head.appendChild(style$$1);
+}
+
+function preventDefaultAndStopPropagation(event) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function moveHighlightToTypedCharacters(event, currentIndex, dropdownInterface) {
+  runActionOnBufferedTypedCharacters(event, dropdownInterface.highlightOptionWithText.bind(this, currentIndex || 0));
+} // eslint-disable-next-line complexity
+
+
+function handleKeyDownOnInput(event, currentIndex, dropdownInterface) {
+  const isVisible = dropdownInterface.isDropdownVisible();
+
+  switch (event.keyCode) {
+    case keyCodes.enter:
+      preventDefaultAndStopPropagation(event);
+
+      if (isVisible && currentIndex >= 0) {
+        dropdownInterface.selectByIndex(currentIndex);
+      } else {
+        dropdownInterface.openDropdownIfNotEmpty();
+      }
+
+      break;
+
+    case keyCodes.pagedown:
+      preventDefaultAndStopPropagation(event);
+
+      if (!isVisible) {
+        dropdownInterface.openDropdownIfNotEmpty();
+      } // Jump 10 options down
+
+
+      requestAnimationFrame(() => dropdownInterface.highlightOptionWithIndex(Math.min(currentIndex + 10, dropdownInterface.getTotalOptions() - 1)));
+      break;
+
+    case keyCodes.pageup:
+      preventDefaultAndStopPropagation(event);
+
+      if (!isVisible) {
+        dropdownInterface.openDropdownIfNotEmpty();
+      } // Jump 10 options up
+
+
+      requestAnimationFrame(() => dropdownInterface.highlightOptionWithIndex(Math.max(currentIndex - 10, 0)));
+      break;
+
+    case keyCodes.home:
+      // If not a read-only input we want the default browser behaviour
+      if (!dropdownInterface.isInputReadOnly()) {
+        break;
+      }
+
+      preventDefaultAndStopPropagation(event);
+
+      if (!isVisible) {
+        dropdownInterface.openDropdownIfNotEmpty();
+      }
+
+      requestAnimationFrame(() => dropdownInterface.highlightOptionWithIndex(0));
+      break;
+
+    case keyCodes.end:
+      // If not a read-only input we want the default browser behaviour
+      if (!dropdownInterface.isInputReadOnly()) {
+        break;
+      }
+
+      preventDefaultAndStopPropagation(event);
+
+      if (!isVisible) {
+        dropdownInterface.openDropdownIfNotEmpty();
+      }
+
+      requestAnimationFrame(() => dropdownInterface.highlightOptionWithIndex(dropdownInterface.getTotalOptions() - 1));
+      break;
+
+    case keyCodes.down:
+    case keyCodes.up:
+      // eslint-disable-line no-case-declarations
+      preventDefaultAndStopPropagation(event);
+
+      if (!isVisible) {
+        currentIndex = -1;
+        dropdownInterface.openDropdownIfNotEmpty();
+      }
+
+      let nextIndex;
+
+      if (currentIndex >= 0) {
+        nextIndex = event.keyCode === keyCodes.up ? currentIndex - 1 : currentIndex + 1;
+
+        if (nextIndex >= dropdownInterface.getTotalOptions()) {
+          nextIndex = 0;
+        } else if (nextIndex < 0) {
+          nextIndex = dropdownInterface.getTotalOptions() - 1;
+        }
+      } else {
+        nextIndex = event.keyCode === keyCodes.up ? dropdownInterface.getTotalOptions() - 1 : 0;
+      }
+
+      requestAnimationFrame(() => {
+        dropdownInterface.highlightOptionWithIndex(nextIndex);
+      });
+      break;
+
+    case keyCodes.escape:
+    case keyCodes.tab:
+      if (isVisible) {
+        event.stopPropagation();
+        dropdownInterface.closeDropdown();
+      }
+
+      break;
+
+    default:
+      if (!isVisible) {
+        dropdownInterface.openDropdownIfNotEmpty();
+      }
+
+      if (dropdownInterface.isInputReadOnly()) {
+        // The element should be read only, it's a work-around for IE11 as it will still make editable an input
+        // that has focus and was dynamically changed to be readonly on focus change. Remove once we no longer
+        // support IE11
+        event.preventDefault();
+        requestAnimationFrame(() => moveHighlightToTypedCharacters(event, currentIndex, dropdownInterface));
+      }
+
+  }
+}
+
+class BaseComboboxEvents {
+  constructor(baseCombobox) {
+    this.dispatchEvent = baseCombobox.dispatchEvent.bind(baseCombobox);
+  }
+
+  dispatchPillRemove(pill) {
+    this.dispatchEvent(new CustomEvent('pillremove', {
+      detail: {
+        item: pill
+      }
+    }));
+  }
+
+  dispatchEndReached() {
+    this.dispatchEvent(new CustomEvent('endreached'));
+  }
+
+  dispatchFocus() {
+    this.dispatchEvent(new CustomEvent('focus'));
+  }
+
+  dispatchBlur() {
+    this.dispatchEvent(new CustomEvent('blur'));
+  }
+
+  dispatchTextInput(text) {
+    this.dispatchEvent(new CustomEvent('textinput', {
+      detail: {
+        text
+      }
+    }));
+  }
+
+  dispatchTextChange(text) {
+    this.dispatchEvent(new CustomEvent('textchange', {
+      detail: {
+        text
+      }
+    }));
+  }
+
+  dispatchSelect(value) {
+    this.dispatchEvent(new CustomEvent('select', {
+      detail: {
+        value
+      }
+    }));
+  }
+
+  dispatchDropdownOpen() {
+    this.dispatchEvent(new CustomEvent('dropdownopen'));
+  }
+
+  dispatchDropdownOpenRequest() {
+    this.dispatchEvent(new CustomEvent('dropdownopenrequest'));
+  }
+
+}
+
+const i18n$1 = {
+  ariaSelectedOptions: labelAriaSelectedOptions,
+  deselectOptionKeyboard: labelDeselectOptionKeyboard,
+  pillCloseButtonAlternativeText: labelPillCloseButtonAlternativeText,
+  loadingText: labelLoadingText
+};
+class LightningBaseCombobox extends Engine.Element {
+  constructor() {
+    super();
+    this.inputText = '';
+    this.inputIconName = 'utility:down';
+    this.inputIconSize = 'x-small';
+    this.inputIconAlternativeText = void 0;
+    this.inputMaxlength = void 0;
+    this.showInputActivityIndicator = false;
+    this.dropdownAlignment = 'left';
+    this.placeholder = 'Select an Item';
+    this.inputControls = void 0;
+    this.inputLabel = void 0;
+    this.inputLabelledBy = void 0;
+    this.inputDescribedBy = void 0;
+    this.inputId = void 0;
+    this.name = void 0;
+    this.inputPill = void 0;
+    this._showDropdownActivityIndicator = false;
+    this._items = [];
+    this._disabled = false;
+    this._dropdownVisible = false;
+    this._hasDropdownOpened = false;
+    this._highlightedOptionElementId = '';
+    this._variant = void 0;
+    this._dropdownHeight = 'standard';
+    this._events = new BaseComboboxEvents(this);
+  }
+
+  connectedCallback() {
+    this.classList.add('slds-combobox_container');
+    this._connected = true;
+    this._keyboardInterface = this.dropdownKeyboardInterface();
+    assert(typeof this.inputId === 'string', '"input-id" must be set.');
+  }
+
+  disconnectedCallback() {
+    this._connected = false;
+    this._listBoxElementCache = undefined;
+  }
+
+  get dropdownHeight() {
+    return this._dropdownHeight;
+  }
+
+  set dropdownHeight(height) {
+    this._dropdownHeight = normalizeString(height, {
+      fallbackValue: 'standard',
+      validValues: ['standard', 'small']
+    });
+  }
+
+  get showDropdownActivityIndicator() {
+    return this._showDropdownActivityIndicator;
+  }
+
+  set showDropdownActivityIndicator(value) {
+    this._showDropdownActivityIndicator = normalizeBoolean(value);
+
+    if (this._connected) {
+      if (this._showDropdownActivityIndicator) {
+        if (this._shouldOpenDropDown) {
+          this.openDropdownIfNotEmpty();
+        }
+      } else if (this._dropdownVisible && this.isDropdownEmpty) {
+        this.closeDropdown();
+      }
+    }
+  }
+
+  get disabled() {
+    return this._disabled;
+  }
+
+  set disabled(value) {
+    this._disabled = normalizeBoolean(value);
+
+    if (this._disabled && this._dropdownVisible) {
+      this.closeDropdown();
+    }
+  }
+
+  get variant() {
+    return this._variant || VARIANT.STANDARD;
+  }
+
+  set variant(value) {
+    this._variant = normalizeString(value, {
+      fallbackValue: VARIANT.STANDARD,
+      validValues: [VARIANT.STANDARD, 'lookup']
+    });
+  }
+
+  set items(items = []) {
+    this._unprocessedItems = items;
+
+    if (this._connected) {
+      if (this._hasDropdownOpened) {
+        // The dropdown has already been opened at least once, so process the items immediately
+        this.updateItems(items);
+
+        if (this._dropdownVisible) {
+          // The dropdown is visible but there are no items to show, close it
+          if (this.isDropdownEmpty) {
+            this.closeDropdown();
+          } else {
+            // We have new items, update highlight
+            this.highlightDefaultItem(); // Since the items have changed, the positioning should be recomputed
+
+            this.startDropdownAutoPositioning();
+          }
+        }
+      }
+
+      if (this._shouldOpenDropDown) {
+        this.openDropdownIfNotEmpty();
+      }
+    }
+  }
+
+  get items() {
+    return this._unprocessedItems;
+  }
+
+  highlightInputText() {
+    if (this._connected) {
+      // Safari has issues with invoking set selection range immediately in the 'focus' handler, instead
+      // we'd be doing it in an animation frame. Remove the requestAnimationFrame once/if this is fixed
+      // in Safari
+      requestAnimationFrame(() => {
+        const {
+          inputElement
+        } = this;
+        inputElement.setSelectionRange(0, inputElement.value.length);
+      });
+    }
+  }
+
+  focus() {
+    if (this._connected) {
+      this.inputElement.focus();
+    }
+  }
+
+  focusAndOpenDropdownIfNotEmpty() {
+    if (this._connected) {
+      if (!this._inputHasFocus) {
+        this.focus();
+      }
+
+      this.openDropdownIfNotEmpty();
+    }
+  }
+
+  blur() {
+    if (this._connected) {
+      this.inputElement.blur();
+    }
+  }
+
+  itemId(index) {
+    return this.inputId + '-' + index;
+  }
+
+  itemIndexFromId(id) {
+    // Extracts the index from an item id.
+    return parseInt(id.substring(id.lastIndexOf('-') + 1), 10);
+  }
+
+  processItem(item) {
+    const itemCopy = {}; // Supported item properties:
+    // 'type' (string): option-inline, option-card
+    // 'highlight' (boolean): Whether to highlight the item when dropdown opens
+    // 'iconName': left icon name
+    // 'iconSize': left icon size
+    // 'iconAlternativeText': assistive text for the left icon
+    // 'rightIconName': right icon name
+    // 'rightIconSize': right icon size
+    // 'rightIconAlternativeText': assistive text for the right icon
+    // 'text': text to display
+    // 'subText': sub-text to display (only option-card supports it)
+    // 'value': value associated with the option
+
+    itemCopy.type = item.type;
+    itemCopy.iconName = item.iconName;
+    itemCopy.iconSize = item.iconSize;
+    itemCopy.iconAlternativeText = item.iconAlternativeText;
+    itemCopy.rightIconName = item.rightIconName;
+    itemCopy.rightIconSize = item.rightIconSize;
+    itemCopy.rightIconAlternativeText = item.rightIconAlternativeText;
+    itemCopy.text = item.text;
+    itemCopy.subText = item.subText;
+    itemCopy.value = item.value; // extra metadata needed
+
+    itemCopy.selectable = ['option-card', 'option-inline'].indexOf(item.type) >= 0;
+
+    if (item.highlight) {
+      this._highlightedItemIndex = this._selectableItems;
+    }
+
+    if (itemCopy.selectable) {
+      itemCopy.index = this._selectableItems;
+      itemCopy.id = this.itemId(itemCopy.index);
+      this._selectableItems += 1;
+    }
+
+    return itemCopy;
+  }
+
+  get _inputReadOnly() {
+    return this.variant === VARIANT.STANDARD || this.hasInputPill;
+  }
+
+  get computedAriaAutocomplete() {
+    if (this.hasInputPill) {
+      // no aria-autocomplete when pill is showing
+      return null;
+    }
+
+    return this._inputReadOnly ? 'none' : 'list';
+  }
+
+  get computedPlaceholder() {
+    return this.hasInputPill ? this.inputPill.label : this.placeholder;
+  }
+
+  get computedInputValue() {
+    return this.hasInputPill ? this.inputPill.label : this.inputText;
+  }
+
+  handleListboxScroll(event) {
+    const listbox = event.target;
+    const height = listbox.getBoundingClientRect().height;
+    const maxScroll = listbox.scrollHeight - height;
+    const bottomReached = listbox.scrollTop >= maxScroll;
+
+    if (bottomReached) {
+      this._events.dispatchEndReached();
+    }
+  }
+
+  get listboxElement() {
+    if (!this._listBoxElementCache) {
+      this._listBoxElementCache = this.template.querySelector('[role="listbox"]');
+    }
+
+    return this._listBoxElementCache;
+  }
+
+  get computedUniqueElementId() {
+    return this.inputId;
+  }
+
+  get computedUniqueDropdownElementId() {
+    return this.inputId + '-base-combobox';
+  }
+
+  get computedInputControls() {
+    const ariaValues = [this.computedUniqueDropdownElementId];
+
+    if (this.inputControls) {
+      ariaValues.push(this.inputControls);
+    }
+
+    return normalizeAriaAttribute(ariaValues);
+  }
+
+  get i18n() {
+    return i18n$1;
+  }
+
+  get computedDropdownTriggerClass() {
+    return classSet('slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click').add({
+      'slds-is-open': this._dropdownVisible
+    }).toString();
+  }
+
+  get computedDropdownClass() {
+    const alignment = this.dropdownAlignment;
+    return classSet('slds-listbox slds-listbox_vertical slds-dropdown slds-dropdown_fluid').add({
+      'slds-dropdown_length-with-icon-10': this._dropdownHeight === 'standard',
+      'slds-dropdown_length-with-icon-5': this._dropdownHeight === 'small',
+      'slds-dropdown_left': alignment === 'left' || alignment === 'auto',
+      'slds-dropdown_center': alignment === 'center',
+      'slds-dropdown_right': alignment === 'right',
+      'slds-dropdown_bottom': alignment === 'bottom-center',
+      'slds-dropdown_bottom slds-dropdown_right slds-dropdown_bottom-right': alignment === 'bottom-right',
+      'slds-dropdown_bottom slds-dropdown_left slds-dropdown_bottom-left': alignment === 'bottom-left'
+    }).toString();
+  }
+
+  get computedInputClass() {
+    const classes = classSet('slds-input slds-combobox__input');
+
+    if (this.hasInputPill) {
+      classes.add('slds-combobox__input-value');
+    } else {
+      classes.add({
+        'slds-input-has-icon_group-right': this.showInputActivityIndicator
+      });
+    }
+
+    return classes.toString();
+  }
+
+  get _shouldOpenDropDown() {
+    // If items were empty and through a user interaction the dropdown should have opened, and if the
+    // component still has the focus we'll open it on items update instead.
+    return this._inputHasFocus && this._requestedDropdownOpen;
+  }
+
+  handleOptionClick(event) {
+    if (event.currentTarget.hasAttribute('aria-selected')) {
+      event.stopPropagation();
+      event.preventDefault();
+      this.selectOptionAndCloseDropdown(event.currentTarget);
+    }
+  }
+
+  handleOptionMouseEnter(event) {
+    if (event.currentTarget.hasAttribute('aria-selected')) {
+      this.highlightOption(event.currentTarget);
+    }
+  }
+
+  handleDropdownMouseLeave() {
+    this.removeHighlight(); // This is to account for when a user makes a mousedown press on the dropdown and then leaves the dropdown
+    // area, it would leave the dropdown open even though the focus would no longer be on the input
+
+    if (!this._inputHasFocus) {
+      this.closeDropdown();
+    }
+  }
+
+  handleTriggerClick(event) {
+    event.stopPropagation();
+    this.allowBlur();
+
+    if (this.disabled) {
+      return;
+    }
+
+    if (!this.hasInputPill) {
+      // toggle dropdown only for readonly combobox, only open the dropdown otherwise
+      // if it's not already opened.
+      if (this._inputReadOnly) {
+        if (this._dropdownVisible) {
+          this.closeDropdown();
+        } else {
+          this.openDropdownIfNotEmpty();
+        }
+      } else {
+        this.openDropdownIfNotEmpty();
+      }
+
+      this.inputElement.focus();
+    }
+  }
+
+  handlePillKeyDown(event) {
+    if (this.disabled) {
+      return;
+    }
+
+    if (event.keyCode === keyCodes.delete) {
+      this.handlePillRemove();
+    }
+  }
+
+  handleInputKeyDown(event) {
+    if (this.disabled) {
+      return;
+    }
+
+    if (this.hasInputPill) {
+      this.handlePillKeyDown(event);
+    } else {
+      handleKeyDownOnInput(event, this.getCurrentHighlightedOptionIndex(), this._keyboardInterface);
+    }
+  }
+
+  handleTextChange() {
+    this._events.dispatchTextChange(this.inputElement.value);
+  }
+
+  handleFocus() {
+    this._inputHasFocus = true;
+
+    this._events.dispatchFocus();
+  }
+
+  handleInput() {
+    this._events.dispatchTextInput(this.inputElement.value);
+  }
+
+  handleBlur() {
+    this._inputHasFocus = false;
+
+    if (this._cancelBlur) {
+      return;
+    }
+
+    this.closeDropdown();
+
+    this._events.dispatchBlur();
+  }
+
+  handleDropdownMouseDown(event) {
+    const mainButton = 0;
+
+    if (event.button === mainButton) {
+      this.cancelBlur();
+    }
+  }
+
+  handleDropdownMouseUp() {
+    // We need this to make sure that if a scrollbar is being dragged with the mouse, upon release
+    // of the drag we allow blur, otherwise the dropdown would not close on blur since we'd have cancel blur
+    // set
+    this.allowBlur();
+  }
+
+  highlightOption(option) {
+    this.removeHighlight();
+
+    if (option) {
+      option.highlight();
+      this._highlightedOptionElement = option;
+      this._highlightedOptionElementId = option.id;
+    }
+  }
+
+  highlightOptionAndScrollIntoView(optionElement) {
+    if (this._items.length === 0 || !optionElement) {
+      return;
+    }
+
+    this.highlightOption(optionElement);
+    scrollIntoViewIfNeeded(optionElement, this.listboxElement);
+  }
+
+  removeHighlight() {
+    const option = this._highlightedOptionElement;
+
+    if (option) {
+      option.removeHighlight();
+      this._highlightedOptionElement = null;
+      this._highlightedOptionElementId = null;
+    }
+  }
+
+  selectOptionAndCloseDropdown(optionElement) {
+    this.closeDropdown();
+    this.inputElement.focus();
+    const value = optionElement.getAttribute('data-value');
+
+    this._events.dispatchSelect(value);
+  }
+
+  handleInputSelect(event) {
+    event.stopPropagation();
+  }
+
+  openDropdownIfNotEmpty() {
+    if (this._dropdownVisible) {
+      // Already visible
+      return;
+    }
+
+    const noOptions = !Array.isArray(this.items) || this.items.length === 0;
+
+    if (noOptions) {
+      // Dispatch dropdown open request
+      this._events.dispatchDropdownOpenRequest();
+    } // Do not open if there's nothing to show in the dropdown (eg. no options and no dropdown activity indicator)
+
+
+    if (this.isDropdownEmpty) {
+      // We use this attribute to flag whether an attempt has been made via user-interaction
+      // to open the dropdown
+      this._requestedDropdownOpen = true;
+      return;
+    }
+
+    if (!this._hasDropdownOpened) {
+      if (this._unprocessedItems) {
+        this.updateItems(this._unprocessedItems);
+      }
+
+      this._hasDropdownOpened = true;
+    }
+
+    this._requestedDropdownOpen = false;
+    this._dropdownVisible = true;
+    this.startDropdownAutoPositioning();
+    this.highlightDefaultItem();
+
+    this._events.dispatchDropdownOpen();
+  }
+
+  closeDropdown() {
+    if (!this._dropdownVisible) {
+      // Already closed
+      return;
+    }
+
+    this.stopDropdownPositioning();
+    this.removeHighlight();
+    this._dropdownVisible = false;
+  }
+
+  findOptionElementByIndex(index) {
+    return this.template.querySelector('#' + this.itemId(index));
+  }
+
+  allowBlur() {
+    this._cancelBlur = false;
+  }
+
+  cancelBlur() {
+    this._cancelBlur = true;
+  }
+
+  getCurrentHighlightedOptionIndex() {
+    if (this._highlightedOptionElementId) {
+      return this.itemIndexFromId(this._highlightedOptionElementId);
+    }
+
+    return -1;
+  }
+
+  get inputElement() {
+    return this.template.querySelector('input');
+  }
+
+  startDropdownAutoPositioning() {
+    if (this.dropdownAlignment !== 'auto') {
+      return;
+    }
+
+    if (!this._autoPosition) {
+      this._autoPosition = new AutoPosition(this);
+    }
+
+    this._autoPosition.start({
+      target: 'input',
+      element: 'div.slds-dropdown',
+      align: {
+        horizontal: Direction.Left,
+        vertical: Direction.Top
+      },
+      targetAlign: {
+        horizontal: Direction.Left,
+        vertical: Direction.Bottom
+      },
+      autoFlip: true,
+      alignWidth: true
+    });
+  }
+
+  stopDropdownPositioning() {
+    if (this._autoPosition) {
+      this._autoPosition.stop();
+    }
+  }
+
+  get hasInputPill() {
+    return this.inputPill && Object.keys(this.inputPill).length > 0;
+  }
+
+  handlePillRemove() {
+    this.inputElement.focus();
+
+    this._events.dispatchPillRemove(this.inputPill);
+  }
+
+  get computedFormElementClass() {
+    const hasIcon = this.hasInputPill && this.inputPill.iconName;
+    return classSet('slds-combobox__form-element slds-input-has-icon').add({
+      'slds-input-has-icon_right': !hasIcon,
+      'slds-input-has-icon_left-right': hasIcon
+    }).toString();
+  }
+
+  get computedAriaExpanded() {
+    return this._dropdownVisible ? 'true' : 'false';
+  }
+
+  updateItems(items) {
+    if (!items) {
+      return;
+    }
+
+    assert(Array.isArray(items), '"items" must be an array');
+    this._selectableItems = 0;
+    this._highlightedItemIndex = 0;
+    this._items = items.map(item => {
+      if (item.items) {
+        // This is a group
+        const groupCopy = {
+          label: item.label
+        };
+        groupCopy.items = item.items.map(groupItem => {
+          return this.processItem(groupItem);
+        });
+        return groupCopy;
+      }
+
+      return this.processItem(item);
+    });
+  }
+
+  highlightDefaultItem() {
+    requestAnimationFrame(() => {
+      this.highlightOptionAndScrollIntoView(this.findOptionElementByIndex(this._highlightedItemIndex));
+    });
+  }
+
+  get isDropdownEmpty() {
+    // If the activity indicator is showing then it's not empty
+    return !this.showDropdownActivityIndicator && (!Array.isArray(this.items) || this.items.length === 0);
+  }
+
+  dropdownKeyboardInterface() {
+    const that = this;
+    return {
+      getTotalOptions() {
+        return that._selectableItems;
+      },
+
+      selectByIndex(index) {
+        that.selectOptionAndCloseDropdown(that.findOptionElementByIndex(index));
+      },
+
+      highlightOptionWithIndex(index) {
+        that.highlightOptionAndScrollIntoView(that.findOptionElementByIndex(index));
+      },
+
+      isInputReadOnly() {
+        return that._inputReadOnly;
+      },
+
+      highlightOptionWithText(currentIndex, text) {
+        // This only supports a flat structure, groups are not supported
+        for (let index = currentIndex + 1; index < that._items.length; index++) {
+          const option = that._items[index];
+
+          if (option.selectable && option.text && option.text.toLowerCase().indexOf(text.toLowerCase()) === 0) {
+            that.highlightOptionAndScrollIntoView(that.findOptionElementByIndex(index));
+            return;
+          }
+        }
+
+        for (let index = 0; index < currentIndex; index++) {
+          const option = that._items[index];
+
+          if (option.selectable && option.text && option.text.toLowerCase().indexOf(text.toLowerCase()) === 0) {
+            that.highlightOptionAndScrollIntoView(that.findOptionElementByIndex(index));
+            return;
+          }
+        }
+      },
+
+      isDropdownVisible() {
+        return that._dropdownVisible;
+      },
+
+      openDropdownIfNotEmpty() {
+        that.openDropdownIfNotEmpty();
+      },
+
+      closeDropdown() {
+        that.closeDropdown();
+      }
+
+    };
+  }
+
+  render() {
+    return tmpl$6;
+  }
+
+}
+LightningBaseCombobox.publicProps = {
+  inputText: {
+    config: 0
+  },
+  inputIconName: {
+    config: 0
+  },
+  inputIconSize: {
+    config: 0
+  },
+  inputIconAlternativeText: {
+    config: 0
+  },
+  inputMaxlength: {
+    config: 0
+  },
+  showInputActivityIndicator: {
+    config: 0
+  },
+  dropdownAlignment: {
+    config: 0
+  },
+  placeholder: {
+    config: 0
+  },
+  inputControls: {
+    config: 0
+  },
+  inputLabel: {
+    config: 0
+  },
+  inputLabelledBy: {
+    config: 0
+  },
+  inputDescribedBy: {
+    config: 0
+  },
+  inputId: {
+    config: 0
+  },
+  name: {
+    config: 0
+  },
+  inputPill: {
+    config: 0
+  },
+  dropdownHeight: {
+    config: 3
+  },
+  showDropdownActivityIndicator: {
+    config: 3
+  },
+  disabled: {
+    config: 3
+  },
+  variant: {
+    config: 3
+  },
+  items: {
+    config: 3
+  }
+};
+LightningBaseCombobox.publicMethods = ["highlightInputText", "focus", "focusAndOpenDropdownIfNotEmpty", "blur"];
+LightningBaseCombobox.track = {
+  _showDropdownActivityIndicator: 1,
+  _items: 1,
+  _disabled: 1,
+  _dropdownVisible: 1,
+  _hasDropdownOpened: 1,
+  _highlightedOptionElementId: 1,
+  _variant: 1,
+  _dropdownHeight: 1
+};
+
+function scrollIntoViewIfNeeded(element, scrollingParent) {
+  const parentRect = scrollingParent.getBoundingClientRect();
+  const findMeRect = element.getBoundingClientRect();
+
+  if (findMeRect.top < parentRect.top) {
+    if (element.offsetTop + findMeRect.height < parentRect.height) {
+      // If element fits by scrolling to the top, then do that
+      scrollingParent.scrollTop = 0;
+    } else {
+      // Otherwise, top align the element
+      scrollingParent.scrollTop = element.offsetTop;
+    }
+  } else if (findMeRect.bottom > parentRect.bottom) {
+    // bottom align the element
+    scrollingParent.scrollTop += findMeRect.bottom - parentRect.bottom;
+  }
+}
+
+var labelRequired = 'required';
+
+function style$7(token) {
+   return `[${token}-host] {
+    display: block;
+}
+`;
+}
+
+function tmpl$7($api, $cmp, $slotset, $ctx) {
+  const {
+    t: api_text,
+    h: api_element,
+    d: api_dynamic,
+    c: api_custom_element,
+    b: api_bind
+  } = $api;
+
+  const {
+    _m0,
+    _m1,
+    _m2,
+    _m3
+  } = $ctx;
+  return [api_element("label", {
+    className: $cmp.computedLabelClass,
+    attrs: {
+      "for": $cmp.computedUniqueElementId
+    },
+    key: 2
+  }, [$cmp.required ? api_element("abbr", {
+    classMap: {
+      "slds-required": true
+    },
+    attrs: {
+      "title": $cmp.i18n.required
+    },
+    key: 1
+  }, [api_text("*")]) : null, api_dynamic($cmp.label)]), $cmp.state.fieldLevelHelp ? api_custom_element("lightning-helptext", LightningHelptext, {
+    props: {
+      "content": $cmp.state.fieldLevelHelp
+    },
+    key: 3
+  }, []) : null, api_element("div", {
+    classMap: {
+      "slds-form-element__control": true
+    },
+    key: 5
+  }, [api_custom_element("lightning-base-combobox", LightningBaseCombobox, {
+    props: {
+      "name": $cmp.name,
+      "inputId": $cmp.computedUniqueElementId,
+      "inputDescribedBy": $cmp.computedUniqueHelpElementId,
+      "disabled": $cmp.disabled,
+      "placeholder": $cmp.placeholder,
+      "items": $cmp._items,
+      "inputText": $cmp.state.selectedLabel,
+      "inputIconSize": "xx-small",
+      "inputIconName": "utility:down",
+      "showDropdownActivityIndicator": $cmp.spinnerActive,
+      "dropdownAlignment": $cmp.dropdownAlignment
+    },
+    key: 4,
+    on: {
+      "dropdownopen": _m0 || ($ctx._m0 = api_bind($cmp.handleDropdownOpen)),
+      "focus": _m1 || ($ctx._m1 = api_bind($cmp.handleFocus)),
+      "blur": _m2 || ($ctx._m2 = api_bind($cmp.handleBlur)),
+      "select": _m3 || ($ctx._m3 = api_bind($cmp.handleSelect))
+    }
+  }, [])]), $cmp._helpMessage ? api_element("div", {
+    classMap: {
+      "slds-form-element__help": true
+    },
+    attrs: {
+      "id": $cmp.computedUniqueHelpElementId,
+      "aria-live": "assertive"
+    },
+    key: 6
+  }, [api_dynamic($cmp._helpMessage)]) : null];
+}
+
+if (style$7) {
+    tmpl$7.hostToken = 'lightning-combobox_combobox-host';
+    tmpl$7.shadowToken = 'lightning-combobox_combobox';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-combobox_combobox';
+    style$$1.textContent = style$7('lightning-combobox_combobox');
+    document.head.appendChild(style$$1);
+}
+
+const i18n$2 = {
+  required: labelRequired
+};
+class LightningCombobox extends Engine.Element {
+  // Validity related message
+  constructor() {
+    super();
+    this.state = {
+      fieldLevelHelp: '',
+      showActivityIndicator: false
+    };
+    this.label = void 0;
+    this.dropdownAlignment = 'left';
+    this.placeholder = 'Select an Option';
+    this.messageWhenValueMissing = void 0;
+    this.name = void 0;
+    this._items = [];
+    this._variant = void 0;
+    this._helpMessage = void 0;
+    this.uniqueId = generateUniqueId();
+  }
+
+  connectedCallback() {
+    this.classList.add('slds-form-element');
+    this.interactingState = new InteractingState();
+    this.interactingState.onleave(() => this.showHelpMessageIfInvalid()); // The connected logic here is needed because at the point when @api setters
+    // are called other values may not have been set yet, so it could happen that the 'value' was set, but 'options'
+    // are not available, or that the 'options' and 'value' have been set but 'multiple' hasn't been set yet.
+    // So here we make sure that we start processing the data only once the element is actually in DOM, which
+    // should be beneficial for performance as well
+
+    this.connected = true;
+    this._items = this.generateItems(this.options);
+
+    if (this.options && this.selectedValue !== undefined) {
+      this.updateSelectedOptions();
+    }
+  }
+
+  disconnectedCallback() {
+    this.connected = false;
+  }
+
+  set fieldLevelHelp(value) {
+    this.state.fieldLevelHelp = value;
+  }
+
+  get fieldLevelHelp() {
+    return this.state.fieldLevelHelp;
+  }
+
+  get variant() {
+    return this._variant || VARIANT.STANDARD;
+  }
+
+  set variant(value) {
+    this._variant = normalizeVariant$1(value);
+  }
+
+  get value() {
+    return this.selectedValue;
+  }
+
+  set value(newValue) {
+    // There are some cases where this won't work correctly
+    // See https://git.soma.salesforce.com/raptor/raptor/issues/457
+    if (newValue !== this.selectedValue) {
+      this.selectedValue = newValue;
+
+      if (this.connected && this.options) {
+        this.updateSelectedOptions();
+      }
+    }
+  }
+
+  get options() {
+    return this._options || [];
+  }
+
+  set options(newValue) {
+    this._options = normalizeArray(newValue);
+
+    if (this.connected) {
+      this._items = this.generateItems(this._options);
+      this.updateSelectedOptions();
+    }
+  }
+
+  get disabled() {
+    return this.state.disabled || this.state.readonly || false;
+  }
+
+  set disabled(value) {
+    this.state.disabled = normalizeBoolean(value);
+  }
+
+  get readOnly() {
+    return this.disabled || false;
+  }
+
+  set readOnly(value) {
+    this.state.readonly = normalizeBoolean(value);
+  }
+
+  get required() {
+    return this.state.required || false;
+  }
+
+  set required(value) {
+    this.state.required = normalizeBoolean(value);
+  }
+
+  get spinnerActive() {
+    return this.state.spinnerActive || false;
+  }
+
+  set spinnerActive(value) {
+    this.state.spinnerActive = normalizeBoolean(value);
+  }
+
+  focus() {
+    if (this.connected) {
+      this.getBaseComboboxElement().focus();
+    }
+  }
+
+  blur() {
+    if (this.connected) {
+      this.getBaseComboboxElement().blur();
+    }
+  }
+
+  get validity() {
+    return this._constraint.validity;
+  }
+
+  checkValidity() {
+    return this._constraint.checkValidity();
+  }
+
+  reportValidity() {
+    return this._constraint.reportValidity(message => {
+      this._helpMessage = message;
+    });
+  }
+
+  setCustomValidity(message) {
+    this._constraint.setCustomValidity(message);
+  }
+
+  showHelpMessageIfInvalid() {
+    this.reportValidity();
+  }
+
+  get computedUniqueHelpElementId() {
+    return this._helpMessage ? this.uniqueId + '-error' : null;
+  }
+
+  get computedUniqueElementId() {
+    return this.uniqueId;
+  }
+
+  get i18n() {
+    return i18n$2;
+  }
+
+  get isLabelHidden() {
+    return this.variant === VARIANT.LABEL_HIDDEN;
+  }
+
+  get computedLabelClass() {
+    return classSet('slds-form-element__label').add({
+      'slds-assistive-text': this.isLabelHidden
+    }).toString();
+  }
+
+  handleSelect(event) {
+    if (event.detail.value === this.selectedValue) {
+      return;
+    }
+
+    this.selectedValue = event.detail.value;
+    this.updateSelectedOptions();
+    this.dispatchEvent(new CustomEvent('change', {
+      composed: true,
+      bubbles: true,
+      detail: {
+        value: this.selectedValue
+      }
+    }));
+  }
+
+  handleFocus() {
+    this.interactingState.enter();
+    this.dispatchEvent(new CustomEvent('focus'));
+  }
+
+  handleBlur() {
+    this.interactingState.leave();
+    this.dispatchEvent(new CustomEvent('blur'));
+  }
+
+  handleDropdownOpen() {
+    this.dispatchEvent(new CustomEvent('open'));
+  }
+
+  updateSelectedOptions() {
+    this.updateSelectedLabelFromValue(this.selectedValue);
+    this.markOptionSelectedFromValue(this.selectedValue);
+  }
+
+  markOptionSelectedFromValue(value) {
+    if (this._items) {
+      const selectedItem = this._items.find(item => item.value === value); // de-select previously selected item
+
+
+      if (this._selectedItem) {
+        this._selectedItem.iconName = undefined;
+        this._selectedItem.highlight = false;
+      }
+
+      this._selectedItem = selectedItem;
+
+      if (selectedItem) {
+        selectedItem.iconName = 'utility:check';
+        this._selectedItem.highlight = true;
+      } // Make a shallow copy to trigger an update on the combobox
+
+
+      this._items = this._items.slice();
+    }
+  }
+
+  updateSelectedLabelFromValue(newValue) {
+    this.state.selectedLabel = this.getOptionLabelByValue(newValue);
+  }
+
+  getOptionLabelByValue(value) {
+    const foundOption = this.options.find(option => option.value === value);
+
+    if (foundOption) {
+      return foundOption.label;
+    }
+
+    return '';
+  }
+
+  generateItems(options) {
+    return options.map(option => {
+      return {
+        type: 'option-inline',
+        text: option.label,
+        highlight: this.value === option.value,
+        value: option.value
+      };
+    });
+  }
+
+  getBaseComboboxElement() {
+    return this.template.querySelector('lightning-base-combobox');
+  }
+
+  get _constraint() {
+    if (!this._constraintApi) {
+      this._constraintApi = new FieldConstraintApi(() => this, {
+        valueMissing: () => !this.disabled && this.required && isEmptyString(this.selectedValue)
+      });
+    }
+
+    return this._constraintApi;
+  }
+
+  render() {
+    return tmpl$7;
+  }
+
+}
+LightningCombobox.publicProps = {
+  label: {
+    config: 0
+  },
+  dropdownAlignment: {
+    config: 0
+  },
+  placeholder: {
+    config: 0
+  },
+  messageWhenValueMissing: {
+    config: 0
+  },
+  name: {
+    config: 0
+  },
+  fieldLevelHelp: {
+    config: 3
+  },
+  variant: {
+    config: 3
+  },
+  value: {
+    config: 3
+  },
+  options: {
+    config: 3
+  },
+  disabled: {
+    config: 3
+  },
+  readOnly: {
+    config: 3
+  },
+  required: {
+    config: 3
+  },
+  spinnerActive: {
+    config: 3
+  },
+  validity: {
+    config: 1
+  }
+};
+LightningCombobox.publicMethods = ["focus", "blur", "checkValidity", "reportValidity", "setCustomValidity", "showHelpMessageIfInvalid"];
+LightningCombobox.track = {
+  state: 1,
+  _items: 1,
+  _variant: 1,
+  _helpMessage: 1
+};
+
+const style$8 = undefined;
+
+function tmpl$8($api, $cmp, $slotset, $ctx) {
+
+  return [];
+}
+
+if (style$8) {
+    tmpl$8.hostToken = 'lightning-primitive-button_primitive-button-host';
+    tmpl$8.shadowToken = 'lightning-primitive-button_primitive-button';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-primitive-button_primitive-button';
+    style$$1.textContent = style$8('lightning-primitive-button_primitive-button');
+    document.head.appendChild(style$$1);
+}
+
+class LightningPrimitiveButton extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.state = {
+      accesskey: null,
+      ariaAtomic: null,
+      ariaControls: null,
+      ariaDescribedBy: null,
+      ariaExpanded: null,
+      ariaLabel: null,
+      ariaLive: null,
+      buttonTabIndex: null,
+      disabled: false
+    }, _temp;
+  }
+
+  get disabled() {
+    return this.state.disabled;
+  }
+
+  set disabled(value) {
+    this.state.disabled = normalizeBoolean(value);
+  }
+
+  set accessKey(value) {
+    this.state.accesskey = value;
+  }
+
+  get accessKey() {
+    return this.state.accesskey;
+  }
+
+  get computedAccessKey() {
+    return this.state.accesskey;
+  }
+
+  get title() {
+    return this.state.title;
+  }
+
+  set title(value) {
+    this.state.title = value;
+  }
+
+  get tabIndex() {
+    return this.state.buttonTabIndex;
+  }
+
+  set tabIndex(value) {
+    this.state.buttonTabIndex = value;
+  }
+
+  get ariaLabel() {
+    return this.state.ariaLabel;
+  }
+
+  set ariaLabel(value) {
+    this.state.ariaLabel = value;
+  }
+
+  get computedAriaLabel() {
+    return this.state.ariaLabel;
+  }
+
+  get ariaDescribedBy() {
+    return this.state.ariaDescribedBy;
+  }
+
+  set ariaDescribedBy(value) {
+    this.state.ariaDescribedBy = value;
+  }
+
+  get computedAriaDescribedBy() {
+    return this.state.ariaDescribedBy;
+  }
+
+  get ariaControls() {
+    return this.state.ariaControls;
+  }
+
+  set ariaControls(value) {
+    this.state.ariaControls = value;
+  }
+
+  get computedAriaControls() {
+    return this.state.ariaControls;
+  }
+
+  get ariaExpanded() {
+    return this.state.ariaExpanded;
+  }
+
+  set ariaExpanded(value) {
+    this.state.ariaExpanded = normalizeString(value, {
+      fallbackValue: undefined,
+      validValues: ['true', 'false']
+    });
+  }
+
+  get computedAriaExpanded() {
+    return this.state.ariaExpanded || null;
+  }
+
+  set ariaLive(value) {
+    this.state.ariaLive = value;
+  }
+
+  get ariaLive() {
+    return this.state.ariaLive;
+  }
+
+  get computedAriaLive() {
+    return this.state.ariaLive;
+  }
+
+  get ariaAtomic() {
+    return this.state.ariaAtomic || null;
+  }
+
+  set ariaAtomic(value) {
+    this.state.ariaAtomic = normalizeString(value, {
+      fallbackValue: undefined,
+      validValues: ['true', 'false']
+    });
+  }
+
+  get computedAriaAtomic() {
+    return this.state.ariaAtomic || null;
+  }
+
+  focus() {}
+
+  render() {
+    return tmpl$8;
+  }
+
+}
+LightningPrimitiveButton.publicProps = {
+  disabled: {
+    config: 3
+  },
+  accessKey: {
+    config: 3
+  },
+  title: {
+    config: 3
+  },
+  tabIndex: {
+    config: 3
+  },
+  ariaLabel: {
+    config: 3
+  },
+  ariaDescribedBy: {
+    config: 3
+  },
+  ariaControls: {
+    config: 3
+  },
+  ariaExpanded: {
+    config: 3
+  },
+  ariaLive: {
+    config: 3
+  },
+  ariaAtomic: {
+    config: 3
+  }
+};
+LightningPrimitiveButton.publicMethods = ["focus"];
+LightningPrimitiveButton.track = {
+  state: 1
+};
+
+const style$9 = undefined;
+
+function tmpl$9($api, $cmp, $slotset, $ctx) {
+  const {
+    c: api_custom_element,
+    d: api_dynamic,
+    b: api_bind,
+    h: api_element
+  } = $api;
+
+  const {
+    _m0,
+    _m1
+  } = $ctx;
+  return [api_element("button", {
+    className: $cmp.computedButtonClass,
+    attrs: {
+      "name": $cmp.name,
+      "accesskey": $cmp.computedAccessKey,
+      "title": $cmp.computedTitle,
+      "type": $cmp.normalizedType,
+      "value": $cmp.value,
+      "tabindex": $cmp.tabIndex,
+      "aria-describedby": $cmp.computedAriaDescribedBy,
+      "aria-label": $cmp.computedAriaLabel,
+      "aria-controls": $cmp.computedAriaControls,
+      "aria-expanded": $cmp.computedAriaExpanded,
+      "aria-live": $cmp.computedAriaLive,
+      "aria-atomic": $cmp.computedAriaAtomic
+    },
+    props: {
+      "disabled": $cmp.disabled
+    },
+    key: 3,
+    on: {
+      "focus": _m0 || ($ctx._m0 = api_bind($cmp.handleButtonFocus)),
+      "blur": _m1 || ($ctx._m1 = api_bind($cmp.handleButtonBlur))
+    }
+  }, [$cmp.showIconLeft ? api_custom_element("lightning-primitive-icon", LightningPrimitiveIcon, {
+    props: {
+      "iconName": $cmp.iconName,
+      "svgClass": $cmp.computedIconClass,
+      "variant": "bare"
+    },
+    key: 1
+  }, []) : null, api_dynamic($cmp.label), $cmp.showIconRight ? api_custom_element("lightning-primitive-icon", LightningPrimitiveIcon, {
+    props: {
+      "iconName": $cmp.iconName,
+      "svgClass": $cmp.computedIconClass,
+      "variant": "bare"
+    },
+    key: 2
+  }, []) : null])];
+}
+
+if (style$9) {
+    tmpl$9.hostToken = 'lightning-button_button-host';
+    tmpl$9.shadowToken = 'lightning-button_button';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-button_button';
+    style$$1.textContent = style$9('lightning-button_button');
+    document.head.appendChild(style$$1);
+}
+
+class LightningButton extends LightningPrimitiveButton {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.name = void 0, this.value = void 0, this.label = void 0, this.variant = 'neutral', this.iconName = void 0, this.iconPosition = 'left', this.type = 'button', this.title = null, _temp;
+  }
+
+  render() {
+    return tmpl$9;
+  }
+
+  get computedButtonClass() {
+    return classSet('slds-button').add({
+      'slds-button_neutral': this.normalizedVariant === 'neutral',
+      'slds-button_brand': this.normalizedVariant === 'brand',
+      'slds-button_destructive': this.normalizedVariant === 'destructive',
+      'slds-button_inverse': this.normalizedVariant === 'inverse',
+      'slds-button_success': this.normalizedVariant === 'success'
+    }).toString();
+  }
+
+  get computedTitle() {
+    return this.title;
+  }
+
+  get normalizedVariant() {
+    return normalizeString(this.variant, {
+      fallbackValue: 'neutral',
+      validValues: ['base', 'neutral', 'brand', 'destructive', 'inverse', 'success']
+    });
+  }
+
+  get normalizedType() {
+    return normalizeString(this.type, {
+      fallbackValue: 'button',
+      validValues: ['button', 'reset', 'submit']
+    });
+  }
+
+  get normalizedIconPosition() {
+    return normalizeString(this.iconPosition, {
+      fallbackValue: 'left',
+      validValues: ['left', 'right']
+    });
+  }
+
+  get showIconLeft() {
+    return this.iconName && this.normalizedIconPosition === 'left';
+  }
+
+  get showIconRight() {
+    return this.iconName && this.normalizedIconPosition === 'right';
+  }
+
+  get computedIconClass() {
+    return classSet('slds-button__icon').add({
+      'slds-button__icon_left': this.normalizedIconPosition === 'left',
+      'slds-button__icon_right': this.normalizedIconPosition === 'right'
+    }).toString();
+  }
+
+  handleButtonFocus() {
+    this.dispatchEvent(new CustomEvent('focus'));
+  }
+
+  handleButtonBlur() {
+    this.dispatchEvent(new CustomEvent('blur'));
+  }
+
+  focus() {
+    this.template.querySelector('button').focus();
+  }
+
+}
+LightningButton.publicProps = {
+  name: {
+    config: 0
+  },
+  value: {
+    config: 0
+  },
+  label: {
+    config: 0
+  },
+  variant: {
+    config: 0
+  },
+  iconName: {
+    config: 0
+  },
+  iconPosition: {
+    config: 0
+  },
+  type: {
+    config: 0
+  }
+};
+LightningButton.publicMethods = ["focus"];
+LightningButton.track = {
+  title: 1
+};
+LightningButton.interopMap = {
+  exposeNativeEvent: {
+    click: true,
+    focus: true,
+    blur: true
+  }
+};
+
+const style$10 = undefined;
+
+function tmpl$10($api, $cmp, $slotset, $ctx) {
+  const {
+    d: api_dynamic
+  } = $api;
+
+  return [api_dynamic($cmp.label)];
+}
+
+if (style$10) {
+    tmpl$10.hostToken = 'lightning-badge_badge-host';
+    tmpl$10.shadowToken = 'lightning-badge_badge';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'lightning-badge_badge';
+    style$$1.textContent = style$10('lightning-badge_badge');
+    document.head.appendChild(style$$1);
+}
+
+/**
+ * Represents a label which holds a small amount of information, such as the
+ * number of unread notifications.
+ */
+
+class LightningBadge extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.label = void 0, _temp;
+  }
+
+  connectedCallback() {
+    this.classList.add('slds-badge');
+  }
+
+  render() {
+    return tmpl$10;
+  }
+
+}
+LightningBadge.publicProps = {
+  label: {
+    config: 0
+  }
+};
+
+function style$11(token) {
+   return `h1[${token}] {
+    color: rgb(0, 112, 210);
+}
+p[${token}] {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+    color: rgb(62, 62, 60);
+}
+`;
+}
+
+function tmpl$11($api, $cmp, $slotset, $ctx) {
+  const {
+    d: api_dynamic,
+    h: api_element,
+    t: api_text,
+    c: api_custom_element
+  } = $api;
+
+  return [api_element("div", {
+    classMap: {
+      "slds-p-around_x-large": true
+    },
+    key: 9
+  }, [api_element("h1", {
+    classMap: {
+      "slds-text-heading_large": true
+    },
+    key: 1
+  }, [api_dynamic($cmp.state.title)]), api_element("div", {
+    classMap: {
+      "slds-p-around_medium": true
+    },
+    key: 2
+  }, []), api_element("p", {
+    classMap: {
+      "slds-text-heading_medium": true
+    },
+    key: 3
+  }, [api_text("Playground now")]), api_custom_element("lightning-combobox", LightningCombobox, {
+    props: {
+      "options": $cmp.options,
+      "value": "supports"
+    },
+    key: 4
+  }, []), api_custom_element("lightning-button", LightningButton, {
+    props: {
+      "label": "SLDS",
+      "iconName": "action:announcement"
+    },
+    key: 5
+  }, []), api_element("div", {
+    key: 6
+  }, [api_text("and")]), api_custom_element("lightning-badge", LightningBadge, {
+    props: {
+      "label": "Lightning Components"
+    },
+    key: 7
+  }, []), api_custom_element("lightning-helptext", LightningHelptext, {
+    props: {
+      "content": "isn't that cool?"
+    },
+    key: 8
+  }, [])])];
+}
+
+if (style$11) {
+    tmpl$11.hostToken = 'c-app_app-host';
+    tmpl$11.shadowToken = 'c-app_app';
+
+    const style$$1 = document.createElement('style');
+    style$$1.type = 'text/css';
+    style$$1.dataset.token = 'c-app_app';
+    style$$1.textContent = style$11('c-app_app');
+    document.head.appendChild(style$$1);
+}
+
+class App extends Engine.Element {
+  constructor(...args) {
+    var _temp;
+
+    return _temp = super(...args), this.state = {
+      title: 'Welcome to Lightning Web Components Playground!'
+    }, _temp;
+  }
+
+  get options() {
+    return [{
+      label: 'supports',
+      value: 'supports'
+    }, {
+      label: 'has ability to show',
+      value: 'shows'
+    }];
+  }
+
+  render() {
+    return tmpl$11;
+  }
+
+}
+App.track = {
+  state: 1
+};
+
+// This is the main entry point to the playground. By default,
+// it simply creates a single lightning web component, and adds 
+// it to the DOM tree.
+
+const element = Engine.createElement('c-app', { is: App });
+document.body.appendChild(element);
+
+}(Engine));
+
+            //# sourceURL=compiledPreview.js
+            </script><c-app c-app_app-host=""><div class="slds-p-around_x-large" c-app_app=""><h1 class="slds-text-heading_large" c-app_app="">Welcome to Lightning Web Components Playground!</h1><div class="slds-p-around_medium" c-app_app=""></div><p class="slds-text-heading_medium" c-app_app="">Playground now</p><lightning-combobox c-app_app="" class="slds-form-element" lightning-combobox_combobox-host=""><label for="input-1" class="slds-form-element__label" lightning-combobox_combobox=""></label><div class="slds-form-element__control" lightning-combobox_combobox=""><lightning-base-combobox lightning-combobox_combobox="" class="slds-combobox_container"><div role="combobox" aria-expanded="false" aria-haspopup="listbox" class="slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click"><div role="none" class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right"><input id="input-1" type="text" role="textbox" autocomplete="off" placeholder="Select an Option" aria-autocomplete="none" aria-activedescendant="" aria-controls="input-1-base-combobox" readonly="" class="slds-input slds-combobox__input"><div class="slds-input__icon-group slds-input__icon-group_right"><lightning-icon class="slds-icon-utility-down slds-input__icon slds-input__icon_right slds-icon_container"><lightning-primitive-icon lightning-primitive-icon_primitive-icon-host=""><svg focusable="false" data-key="down" aria-hidden="true" class="slds-icon slds-icon-text-default slds-icon_xx-small" lightning-primitive-icon_primitive-icon="">
+<use xlink:href="/slds/2.7.4/assets/icons/utility-sprite/svg/symbols.svg#down" lightning-primitive-icon_primitive-icon=""></use>
+</svg></lightning-primitive-icon></lightning-icon></div></div><div id="input-1-base-combobox" role="listbox" class="slds-listbox slds-listbox_vertical slds-dropdown slds-dropdown_fluid slds-dropdown_length-with-icon-10 slds-dropdown_left"></div></div></lightning-base-combobox></div></lightning-combobox><lightning-button c-app_app=""><button type="button" class="slds-button slds-button_neutral"><lightning-primitive-icon lightning-primitive-icon_primitive-icon-host=""><svg focusable="false" data-key="announcement" aria-hidden="true" class="slds-button__icon slds-button__icon_left" lightning-primitive-icon_primitive-icon="">
+<use xlink:href="/slds/2.7.4/assets/icons/action-sprite/svg/symbols.svg#announcement" lightning-primitive-icon_primitive-icon=""></use>
+</svg></lightning-primitive-icon>SLDS</button></lightning-button><div c-app_app="">and</div><lightning-badge c-app_app="" class="slds-badge">Lightning Components</lightning-badge><lightning-helptext c-app_app=""><div class="slds-form-element__icon slds-align-middle"><button type="button" aria-describedby="salesforce-lightning-helptext-bubble_60d59988-2c01-5ee7-2dda-77c58d808d16" class="slds-button slds-button_icon"><lightning-primitive-icon lightning-primitive-icon_primitive-icon-host=""><svg focusable="false" data-key="info" aria-hidden="true" class="slds-button__icon" lightning-primitive-icon_primitive-icon="">
+<use xlink:href="/slds/2.7.4/assets/icons/utility-sprite/svg/symbols.svg#info" lightning-primitive-icon_primitive-icon=""></use>
+</svg></lightning-primitive-icon><span class="slds-assistive-text">Help</span></button></div></lightning-helptext></div></c-app>
+        
+        
+    </body></html>

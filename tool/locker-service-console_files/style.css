@@ -1,0 +1,32 @@
+html, body {
+    height: 100%;
+    width: 100%;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+header, footer {
+  flex-shrink: 0;
+}
+main {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: horizontal;
+}
+article {
+  flex-grow: 1;
+  min-width: 33%;
+}
+aside {
+  flex-grow: 0;
+  flex-shrink: 1;
+}
+table th svg {
+  margin-top: -0.2rem;
+}
+
+.CodeMirror {
+	height: 100% !important;
+  font-size: 1.2em;
+}

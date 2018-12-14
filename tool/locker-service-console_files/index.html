@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!-- saved from url=(0070)https://tools-lockerservice-prod.herokuapp.com/apps/console/index.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>Locker Console</title>
+    <link rel="stylesheet" href="./salesforce-lightning-design-system.css">
+    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./codemirror.css">
+    <link rel="stylesheet" href="./show-hint.css">
+
+    <script src="./lodash.js"></script>
+    <script src="./benchmark.js"></script>
+
+    <script src="./codemirror.js"></script>
+    <script src="./javascript.js"></script>
+    <script src="./closebrackets.js"></script>
+    <script src="./matchbrackets.js"></script>
+    <script src="./show-hint.js"></script>
+    <script src="./javascript-hint.js"></script>
+<meta http-equiv="Content-Security-Policy" content="script-src &#39;unsafe-eval&#39; https: http:;"></head>
+
+<body>
+  <header class="slds-page-header slds-clearfix">
+    <div class="slds-grid slds-grid_vertical-align-center">
+      <div class="slds-col slds-no-flex">
+        <h1 class="slds-page-header__title slds-align-middle">
+          Locker Console
+        </h1>
+      </div>
+      <div class="slds-col slds-no-flex">
+        <div class="slds-form-element slds-m-left_small">
+          <div class="slds-form-element__icon slds-align-middle">
+            <button class="slds-button slds-button_icon slds-button slds-button_icon" aria-describedby="information-popover" title="Help" id="information-icon">
+              <svg class="slds-button__icon slds-icon_small" aria-hidden="true">
+                <use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="../assets/icons/utility-sprite/svg/symbols.svg#info"></use>
+              </svg>
+              <span class="slds-assistive-text">Help</span>
+            </button>
+          </div>
+        </div>
+        <div class="slds-popover slds-nubbin_top-left slds-popover_large slds-text-body_regular slds-is-absolute slds-m-top_small slds-hidden" role="tooltip" id="information-popover">
+          <div class="slds-popover__body">
+            Locker Console helps you debug code running Locker. 
+            Enter your code in the text area.<br><br>
+            <ul class="slds-list_dotted">
+              <li>Click Evaluate to see the result of running your code with Strict CSP and Locker.</li>
+              <li>Click Benchmark to run your code with and without Locker and view relative performance metrics.</li>
+              <li>Click Clear Results to erase all the results.</li>
+              <li>Optionally, click the Strict CSP and/or Locker switches to change the environment to test your code, then try Evaluate and Benchmark again.</li>
+            </ul><br>
+            See Locker API Viewer to determine which DOM APIs are not compatible with Locker.
+          </div>
+        </div>
+      </div>
+      <div id="controls" class="slds-col_bump-left slds-no-flex">
+        <div class="slds-grid slds-grid_vertical-align-center">
+          <div class="slds-col">
+            <label class="slds-checkbox_toggle slds-grid slds-grid_vertical-align-center">
+              <span class="slds-form-element__label slds-m-bottom_none">Locker</span>
+              <input id="input-locker" type="checkbox" name="locker" aria-describedby="toggle-locker">
+              <span id="toggle-locker" class="slds-checkbox_faux_container" aria-live="assertive">
+                <span class="slds-checkbox_faux"></span>
+              </span>
+            </label>
+          </div>
+          <div class="slds-col slds-no-flex">
+            <label class="slds-checkbox_toggle slds-grid slds-grid_vertical-align-center slds-m-left_small">
+              <span class="slds-form-element__label slds-m-bottom_none">Strict CSP</span>
+              <input id="input-csp" type="checkbox" name="csp" aria-describedby="toggle-csp">
+              <span id="toggle-csp" class="slds-checkbox_faux_container" aria-live="assertive">
+                <span class="slds-checkbox_faux"></span>
+              </span>
+            </label>
+          </div>
+          <div class="slds-col slds-no-flex slds-p-left_medium">
+            <button id="btn-evaluate" class="slds-button slds-button_neutral">Evaluate</button>
+            <button id="btn-benchmark" class="slds-button slds-button_neutral ">Benchmark</button>
+            <button id="btn-clear" class="slds-button slds-button_neutral">Clear Results</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="slds-grid">
+      <article class="slds-box_border">
+          <textarea id="source-code" placeholder="Source Code" class="slds-hide" style="display: none;"></textarea><div class="CodeMirror cm-s-default CodeMirror-wrap"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 4px; left: 34px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;" tabindex="0"></textarea></div><div class="CodeMirror-vscrollbar" tabindex="-1" cm-not-content="true"><div style="min-width: 1px; height: 0px;"></div></div><div class="CodeMirror-hscrollbar" tabindex="-1" cm-not-content="true"><div style="height: 100%; min-height: 1px; width: 0px;"></div></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 30px; margin-bottom: -15px; border-right-width: 15px; min-height: 27px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><span><span>​</span>x</span></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-cursors"><div class="CodeMirror-cursor" style="left: 4px; top: 0px; height: 19px;">&nbsp;</div></div><div class="CodeMirror-code" role="presentation"><div style="position: relative;"><div class="CodeMirror-gutter-wrapper" style="left: -30px;"><div class="CodeMirror-linenumber CodeMirror-gutter-elt" style="left: 0px; width: 21px;">1</div></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre></div></div></div></div></div></div><div style="position: absolute; height: 15px; width: 1px; border-bottom: 0px solid transparent; top: 27px;"></div><div class="CodeMirror-gutters" style="height: 42px;"><div class="CodeMirror-gutter CodeMirror-linenumbers" style="width: 29px;"></div></div></div></div>
+      </article>
+      <aside id="grid-output">
+      </aside>
+  </main>
+
+
+<script type="text/template" id="grid-template">
+        <table class="slds-table slds-table_bordered slds-no-row-hover slds-table_col-bordered slds-border_left slds-border_right">
+            <thead>
+                <tr class="slds-text-title_caps">
+                    <th>Source Code</th>
+                    <th>
+                      <svg class="slds-icon slds-icon_xx-small slds-icon-text-light" aria-hidden="true"><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="../assets/icons/utility-sprite/svg/symbols.svg#unlock"></use></svg>
+                      Locker Off
+                    </th>
+                    <th>
+                      <svg class="slds-icon slds-icon_xx-small slds-icon-text-default" aria-hidden="true"><use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="../assets/icons/utility-sprite/svg/symbols.svg#lock"></use></svg>
+                      Locker On
+                    </th>
+                    <th>Fastest</th>
+                </tr>
+            </thead>
+            <tbody>
+            <% for(let i = 0; i < rows.length; i++) { %>
+            <% let row = rows[i] %>
+                <tr>
+                    <td class="slds-truncate" style="max-width:200px;"><%- f(row.code) %></td>
+                    <td><%= f(row.unsafe) %></td>
+                    <td><%= f(row.safe) %></td>
+                    <td><%- f(row.fastest) %></td>
+                </tr>
+            <% } %>
+            </tbody>
+        </table>
+</script>
+
+<script src="./purify.js"></script>
+<script src="./locker.js"></script>
+<script src="./locker-console.js"></script>
+
+</body></html>
